@@ -44,7 +44,8 @@
         <a href="#driver" class="block py-2 border-b border-slate-700">3. 司機端操作</a>
         <a href="#admin" class="block py-2 border-b border-slate-700">4. 管理端操作</a>
         <a href="#logic" class="block py-2 border-b border-slate-700">5. 系統邏輯</a>
-        <a href="#limits" class="block py-2">6. 限制與支援</a>
+        <a href="#limits" class="block py-2 border-b border-slate-700">6. 限制與支援</a>
+        <a href="#deploy" class="block py-2">7. 部署教學</a>
     </div>
 
     <div class="flex flex-col md:flex-row min-h-screen">
@@ -62,6 +63,7 @@
                     <a href="#admin" class="block py-2 px-3 rounded hover:bg-slate-800 hover:text-white transition"><i class="fas fa-user-shield w-6"></i> 管理端操作</a>
                     <a href="#logic" class="block py-2 px-3 rounded hover:bg-slate-800 hover:text-white transition"><i class="fas fa-brain w-6"></i> 系統邏輯</a>
                     <a href="#limits" class="block py-2 px-3 rounded hover:bg-slate-800 hover:text-white transition"><i class="fas fa-exclamation-triangle w-6"></i> 限制與支援</a>
+                    <a href="#deploy" class="block py-2 px-3 rounded hover:bg-slate-800 hover:text-white transition"><i class="fas fa-rocket w-6"></i> 部署教學</a>
                 </nav>
 
                 <div class="mt-8 pt-8 border-t border-slate-700">
@@ -381,7 +383,7 @@
             </section>
 
             <!-- 6. 限制與支援 -->
-            <section id="limits" class="mb-12 scroll-mt-20">
+            <section id="limits" class="mb-16 scroll-mt-20">
                 <h2 class="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">
                     <span class="w-2 h-8 bg-blue-600 rounded"></span> 6. v0 版本限制
                 </h2>
@@ -409,6 +411,99 @@
                             </div>
                         </li>
                     </ul>
+                </div>
+            </section>
+
+            <!-- 7. 部署教學 -->
+            <section id="deploy" class="mb-12 scroll-mt-20">
+                <h2 class="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+                    <span class="w-2 h-8 bg-blue-600 rounded"></span> 7. 部署教學：將 GAS 部署為 Web App
+                </h2>
+                
+                <p class="text-slate-600 mb-6 leading-relaxed">
+                    本系統採用「Google Sheet 作為資料庫、GAS 作為 API」的架構。以下步驟可完成後端部署，讓前端網頁能透過 Web App URL 呼叫 API（create/list/summary...）。
+                </p>
+
+                <div class="space-y-6">
+                    
+                    <!-- Step 1 -->
+                    <div class="flex gap-4">
+                        <div class="flex-shrink-0 w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">1</div>
+                        <div class="flex-grow bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
+                            <h3 class="font-bold text-lg text-slate-800 mb-2">準備 Google Sheet（資料庫）</h3>
+                            <ul class="text-sm text-slate-600 list-disc pl-5 space-y-1">
+                                <li>建立或開啟專案用 Google Sheet（建議為獨立一份，不與其他用途混用）。</li>
+                                <li>進入「檔案 → 試算表設定」，<strong class="text-red-600">確認時區為：台北標準時間（GMT+8 / Asia/Taipei）</strong>。</li>
+                                <li class="text-slate-500 text-xs mt-1">※ 這個設定非常重要，會影響管理端「依日期查詢」是否正常。</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div class="flex gap-4">
+                        <div class="flex-shrink-0 w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">2</div>
+                        <div class="flex-grow bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
+                            <h3 class="font-bold text-lg text-slate-800 mb-2">建立 Apps Script 專案</h3>
+                            <ul class="text-sm text-slate-600 list-disc pl-5 space-y-1">
+                                <li>在 Google Sheet 內，點選：<strong>擴充功能 → Apps Script</strong>。</li>
+                                <li>建立一個新專案後，找到 <code>Code.gs</code>（或主程式檔）。</li>
+                                <li>將後端程式碼貼上並儲存。</li>
+                                <li>確認程式碼中是否使用 <code>SpreadsheetApp.getActiveSpreadsheet()</code> 以綁定目前試算表。</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Step 3 -->
+                    <div class="flex gap-4">
+                        <div class="flex-shrink-0 w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">3</div>
+                        <div class="flex-grow bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
+                            <h3 class="font-bold text-lg text-slate-800 mb-2">第一次授權</h3>
+                            <ul class="text-sm text-slate-600 list-disc pl-5 space-y-1">
+                                <li>在 Apps Script 編輯器上方，點選「執行」任一個函式（或直接部署也會觸發）。</li>
+                                <li>系統會彈出權限要求，請選擇你的 Google 帳號並點選「進階」→「前往...」以同意權限。</li>
+                                <li class="text-slate-500 text-xs mt-1">※ 權限包含：讀寫試算表、建立/讀取 Drive 檔案（用於照片上傳）。</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Step 4 -->
+                    <div class="flex gap-4">
+                        <div class="flex-shrink-0 w-10 h-10 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center font-bold"><i class="fas fa-cloud-upload-alt"></i></div>
+                        <div class="flex-grow bg-white p-5 rounded-lg border border-amber-200 shadow-sm ring-1 ring-amber-100">
+                            <h3 class="font-bold text-lg text-slate-800 mb-2">部署為 Web App（取得 API URL）</h3>
+                            <p class="text-sm text-slate-600 mb-2">右上角點選：<strong>部署 → 新增部署 (New deployment)</strong>，類型選擇「網頁應用程式 (Web app)」。</p>
+                            <div class="bg-slate-50 p-3 rounded border border-slate-200 text-sm">
+                                <div class="grid grid-cols-[120px_1fr] gap-2 mb-2">
+                                    <span class="font-bold text-slate-700">執行身分：</span>
+                                    <span>我 (Me) <span class="text-slate-400 text-xs ml-1">- 代表使用你的權限寫入 DB</span></span>
+                                </div>
+                                <div class="grid grid-cols-[120px_1fr] gap-2">
+                                    <span class="font-bold text-slate-700">可存取對象：</span>
+                                    <span>任何人 (Anyone) <span class="text-slate-400 text-xs ml-1">- v0 先求上線，方便前端呼叫</span></span>
+                                </div>
+                            </div>
+                            <p class="text-sm text-slate-600 mt-2">點選「部署」後，複製 <strong>Web App URL</strong>（即為 API_BASE_URL）。</p>
+                        </div>
+                    </div>
+
+                    <!-- Step 5 & 6 -->
+                    <div class="flex gap-4">
+                        <div class="flex-shrink-0 w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold"><i class="fas fa-check"></i></div>
+                        <div class="flex-grow bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
+                            <h3 class="font-bold text-lg text-slate-800 mb-2">前端設定與驗證</h3>
+                            <ul class="text-sm text-slate-600 list-disc pl-5 space-y-1">
+                                <li><strong>前端設定：</strong>將 HTML 中的 <code>API_BASE_URL</code> 變數替換為上一步取得的網址。</li>
+                                <li><strong>快速驗證：</strong>
+                                    <ol class="list-decimal pl-5 mt-1 space-y-1 text-slate-500">
+                                        <li>用司機端提交一筆資料（含照片）。</li>
+                                        <li>確認 Google Sheet 的 Bookings 分頁有新增資料。</li>
+                                        <li>確認 Google Drive 有新增照片檔案。</li>
+                                    </ol>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
                 </div>
             </section>
 
