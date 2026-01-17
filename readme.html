@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>倉儲車輛預約管理系統操作手冊 (Pre 1.0)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            scroll-behavior: smooth;
+        }
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white; }
+            .page-break { page-break-before: always; }
+        }
+        /* Custom Scrollbar for Tables */
+        .table-container::-webkit-scrollbar {
+            height: 8px;
+        }
+        .table-container::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+    <!-- Mobile Header (Visible only on small screens) -->
+    <header class="md:hidden bg-slate-900 text-white p-4 sticky top-0 z-50 shadow-md flex justify-between items-center">
+        <div class="font-bold text-lg">車輛預約系統手冊</div>
+        <button onclick="document.getElementById('mobile-menu').classList.toggle('hidden')" class="text-white focus:outline-none">
+            <i class="fas fa-bars text-2xl"></i>
+        </button>
+    </header>
+
+    <!-- Mobile Menu -->
+    <div id="mobile-menu" class="hidden md:hidden bg-slate-800 text-white p-4 fixed w-full z-40 top-16 shadow-lg">
+        <a href="#intro" class="block py-2 border-b border-slate-700">1. 系統簡介</a>
+        <a href="#roles" class="block py-2 border-b border-slate-700">2. 角色與權限</a>
+        <a href="#driver" class="block py-2 border-b border-slate-700">3. 司機端操作</a>
+        <a href="#admin" class="block py-2 border-b border-slate-700">4. 管理端操作</a>
+        <a href="#logic" class="block py-2 border-b border-slate-700">5. 系統邏輯</a>
+        <a href="#limits" class="block py-2">6. 限制與支援</a>
+    </div>
+
+    <div class="flex flex-col md:flex-row min-h-screen">
+        
+        <!-- Sidebar (Desktop) -->
+        <aside class="hidden md:block w-64 bg-slate-900 text-slate-300 flex-shrink-0 sticky top-0 h-screen overflow-y-auto no-print">
+            <div class="p-6">
+                <h1 class="text-xl font-bold text-white mb-2">操作說明書</h1>
+                <div class="text-xs text-slate-400 mb-6">v1.0 (Pre) | 2026.01.18</div>
+                
+                <nav class="space-y-1">
+                    <a href="#intro" class="block py-2 px-3 rounded hover:bg-slate-800 hover:text-white transition"><i class="fas fa-info-circle w-6"></i> 系統簡介</a>
+                    <a href="#roles" class="block py-2 px-3 rounded hover:bg-slate-800 hover:text-white transition"><i class="fas fa-users w-6"></i> 角色與權限</a>
+                    <a href="#driver" class="block py-2 px-3 rounded hover:bg-slate-800 hover:text-white transition"><i class="fas fa-truck w-6"></i> 司機端操作</a>
+                    <a href="#admin" class="block py-2 px-3 rounded hover:bg-slate-800 hover:text-white transition"><i class="fas fa-user-shield w-6"></i> 管理端操作</a>
+                    <a href="#logic" class="block py-2 px-3 rounded hover:bg-slate-800 hover:text-white transition"><i class="fas fa-brain w-6"></i> 系統邏輯</a>
+                    <a href="#limits" class="block py-2 px-3 rounded hover:bg-slate-800 hover:text-white transition"><i class="fas fa-exclamation-triangle w-6"></i> 限制與支援</a>
+                </nav>
+
+                <div class="mt-8 pt-8 border-t border-slate-700">
+                    <button onclick="window.print()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded flex items-center justify-center gap-2 transition">
+                        <i class="fas fa-print"></i> 列印手冊
+                    </button>
+                </div>
+            </div>
+            <div class="p-6 text-xs text-slate-500 mt-auto">
+                System Designed by<br>Force Cheng
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 p-6 md:p-12 max-w-5xl mx-auto">
+            
+            <!-- Header Section -->
+            <div class="border-b border-slate-200 pb-6 mb-10">
+                <h1 class="text-3xl md:text-4xl font-bold text-slate-900 mb-4">倉儲車輛預約管理系統 <span class="text-blue-600">操作說明書</span></h1>
+                <div class="flex flex-wrap gap-4 text-sm text-slate-500">
+                    <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-medium">Pre 1.0 版本</span>
+                    <span class="flex items-center gap-1"><i class="far fa-calendar-alt"></i> 2026/01/18</span>
+                    <span class="flex items-center gap-1"><i class="fas fa-pen-nib"></i> 設計者: Force Cheng</span>
+                </div>
+            </div>
+
+            <!-- 1. 系統簡介 -->
+            <section id="intro" class="mb-16 scroll-mt-20">
+                <h2 class="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+                    <span class="w-2 h-8 bg-blue-600 rounded"></span> 1. 系統簡介與用途
+                </h2>
+                
+                <div class="grid md:grid-cols-2 gap-8 items-center">
+                    <div class="prose text-slate-600 leading-relaxed">
+                        <p class="mb-4">本系統為一套<strong>「輕量級、快速落地」</strong>的倉儲車輛預約與現場管理工具。採用 WebApp 架構（網頁版），無需下載 App 即可使用。</p>
+                        <h3 class="font-bold text-slate-800 mt-4 mb-2">核心目的：</h3>
+                        <ul class="list-disc pl-5 space-y-2">
+                            <li><strong class="text-blue-700">分流管理：</strong>降低現場車輛同時湧入造成的碼頭擁塞。</li>
+                            <li><strong class="text-blue-700">數位紀錄：</strong>建立可追溯的車輛到場紀錄（包含照片與時間）。</li>
+                            <li><strong class="text-blue-700">即時調度：</strong>提供管理者即時掌握每日車輛負載狀況。</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- SVG: 設計原則 -->
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center justify-center">
+                        <svg width="300" height="180" viewBox="0 0 300 180" xmlns="http://www.w3.org/2000/svg">
+                            <!-- Mobile First -->
+                            <g transform="translate(30, 20)">
+                                <rect x="10" y="0" width="40" height="70" rx="4" fill="#3B82F6" opacity="0.1" stroke="#3B82F6" stroke-width="2"/>
+                                <rect x="25" y="5" width="10" height="2" rx="1" fill="#3B82F6"/>
+                                <circle cx="30" cy="60" r="3" fill="#3B82F6"/>
+                                <text x="30" y="90" font-family="sans-serif" font-size="12" text-anchor="middle" fill="#334155" font-weight="bold">手機優先</text>
+                            </g>
+                            <!-- Arrow -->
+                            <path d="M90 55 L110 55" stroke="#CBD5E1" stroke-width="2" marker-end="url(#arrowhead)"/>
+                            
+                            <!-- Speed -->
+                            <g transform="translate(130, 20)">
+                                <circle cx="30" cy="35" r="30" fill="#10B981" opacity="0.1" stroke="#10B981" stroke-width="2"/>
+                                <path d="M30 35 L45 20" stroke="#10B981" stroke-width="2" stroke-linecap="round"/>
+                                <text x="30" y="90" font-family="sans-serif" font-size="12" text-anchor="middle" fill="#334155" font-weight="bold">快速通關</text>
+                            </g>
+
+                            <!-- Arrow -->
+                            <path d="M190 55 L210 55" stroke="#CBD5E1" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+                            <!-- Cloud -->
+                            <g transform="translate(230, 20)">
+                                <path d="M10 40 Q5 40 5 30 Q5 15 20 15 Q25 5 40 5 Q55 5 60 20 Q70 20 70 35 Q70 45 60 45 L10 45 Z" fill="#6366F1" opacity="0.1" stroke="#6366F1" stroke-width="2"/>
+                                <text x="35" y="90" font-family="sans-serif" font-size="12" text-anchor="middle" fill="#334155" font-weight="bold">雲端彈性</text>
+                            </g>
+
+                            <defs>
+                                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
+                                    <polygon points="0 0, 10 3.5, 0 7" fill="#CBD5E1" />
+                                </marker>
+                            </defs>
+                        </svg>
+                        <p class="text-xs text-slate-400 mt-2">v0 設計原則示意圖</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. 角色與權限 -->
+            <section id="roles" class="mb-16 scroll-mt-20">
+                <h2 class="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+                    <span class="w-2 h-8 bg-blue-600 rounded"></span> 2. 角色與權限說明
+                </h2>
+
+                <div class="overflow-x-auto table-container rounded-lg shadow-sm border border-slate-200">
+                    <table class="w-full text-left border-collapse bg-white">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-slate-700">
+                                <th class="p-4 font-bold w-1/4">角色 (Role)</th>
+                                <th class="p-4 font-bold w-1/4">適用對象</th>
+                                <th class="p-4 font-bold w-1/4">使用裝置</th>
+                                <th class="p-4 font-bold">主要功能權限</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-sm md:text-base">
+                            <tr class="hover:bg-blue-50 transition">
+                                <td class="p-4">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
+                                            <i class="fas fa-truck"></i>
+                                        </div>
+                                        <div class="font-bold text-slate-800">司機端<br><span class="text-xs text-slate-500 font-normal">Driver</span></div>
+                                    </div>
+                                </td>
+                                <td class="p-4 text-slate-600">物流司機<br>送貨人員</td>
+                                <td class="p-4 text-slate-600"><span class="bg-slate-100 px-2 py-1 rounded border border-slate-200"><i class="fas fa-mobile-alt"></i> 手機</span></td>
+                                <td class="p-4">
+                                    <ul class="list-disc pl-4 space-y-1 text-slate-600">
+                                        <li>填寫預約 / 現場登記單</li>
+                                        <li>上傳到場照片 (必填)</li>
+                                        <li>取得報到單號憑證</li>
+                                    </ul>
+                                </td>
+                            </tr>
+                            <tr class="hover:bg-amber-50 transition">
+                                <td class="p-4">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
+                                            <i class="fas fa-user-shield"></i>
+                                        </div>
+                                        <div class="font-bold text-slate-800">管理端<br><span class="text-xs text-slate-500 font-normal">Admin</span></div>
+                                    </div>
+                                </td>
+                                <td class="p-4 text-slate-600">倉管人員<br>警衛 / 調度員</td>
+                                <td class="p-4 text-slate-600">電腦 / 平板 / 手機</td>
+                                <td class="p-4">
+                                    <ul class="list-disc pl-4 space-y-1 text-slate-600">
+                                        <li>查看每日車輛總覽 (戰情室)</li>
+                                        <li>調整時段容量 (STD / PROJ)</li>
+                                        <li>檢視詳細車輛資料與照片</li>
+                                    </ul>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- 3. 司機端操作 -->
+            <section id="driver" class="mb-16 scroll-mt-20">
+                <h2 class="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+                    <span class="w-2 h-8 bg-blue-600 rounded"></span> 3. 司機端操作說明
+                </h2>
+                
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-6">
+                    <!-- SVG Flowchart -->
+                    <h3 class="font-bold text-lg mb-4 text-slate-700">操作流程圖</h3>
+                    <div class="w-full overflow-x-auto text-center py-4">
+                        <svg width="600" height="100" viewBox="0 0 600 100" xmlns="http://www.w3.org/2000/svg">
+                            <!-- Step 1 -->
+                            <g>
+                                <rect x="0" y="20" width="100" height="60" rx="8" fill="#EFF6FF" stroke="#3B82F6" stroke-width="2"/>
+                                <text x="50" y="55" font-family="sans-serif" font-size="14" text-anchor="middle" fill="#1E40AF">掃描/開啟</text>
+                            </g>
+                            <path d="M105 50 L125 50" stroke="#CBD5E1" stroke-width="2" marker-end="url(#arrowhead)"/>
+                            
+                            <!-- Step 2 -->
+                            <g transform="translate(130, 0)">
+                                <rect x="0" y="20" width="100" height="60" rx="8" fill="#EFF6FF" stroke="#3B82F6" stroke-width="2"/>
+                                <text x="50" y="45" font-family="sans-serif" font-size="14" text-anchor="middle" fill="#1E40AF">選擇類型</text>
+                                <text x="50" y="65" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#64748B">(預約/現場)</text>
+                            </g>
+                            <path d="M235 50 L255 50" stroke="#CBD5E1" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+                            <!-- Step 3 -->
+                            <g transform="translate(260, 0)">
+                                <rect x="0" y="20" width="100" height="60" rx="8" fill="#EFF6FF" stroke="#3B82F6" stroke-width="2"/>
+                                <text x="50" y="55" font-family="sans-serif" font-size="14" text-anchor="middle" fill="#1E40AF">填寫資料</text>
+                            </g>
+                            <path d="M365 50 L385 50" stroke="#CBD5E1" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+                            <!-- Step 4 -->
+                            <g transform="translate(390, 0)">
+                                <rect x="0" y="20" width="100" height="60" rx="8" fill="#F0FDF4" stroke="#10B981" stroke-width="2"/>
+                                <text x="50" y="45" font-family="sans-serif" font-size="14" text-anchor="middle" fill="#065F46">拍照上傳</text>
+                                <text x="50" y="65" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#64748B">(車牌/貨物)</text>
+                            </g>
+                            <path d="M495 50 L515 50" stroke="#CBD5E1" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+                            <!-- Step 5 -->
+                            <g transform="translate(520, 0)">
+                                <rect x="0" y="20" width="80" height="60" rx="8" fill="#1E293B" stroke="#1E293B" stroke-width="2"/>
+                                <text x="40" y="55" font-family="sans-serif" font-size="14" text-anchor="middle" fill="white">完成登記</text>
+                            </g>
+                        </svg>
+                    </div>
+                </div>
+
+                <div class="space-y-4">
+                    <div class="bg-blue-50 border-l-4 border-blue-500 p-4">
+                        <h4 class="font-bold text-blue-800">必填欄位指南</h4>
+                        <ul class="mt-2 text-sm text-blue-900 space-y-1">
+                            <li>• <strong>作業類型：</strong>請依實際狀況選擇。</li>
+                            <li>• <strong>ETA：</strong>系統預設為 +1 小時，可手動調整。</li>
+                            <li>• <strong>聯絡電話：</strong>手機或 Line ID 至少填一項。</li>
+                            <li>• <strong>現場照片：</strong><span class="text-red-600 font-bold">必須上傳 1 張</span>，建議拍攝清晰車牌。</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="bg-slate-100 p-4 rounded-lg">
+                        <h4 class="font-bold text-slate-700 mb-2">常見問題 (Driver)</h4>
+                        <details class="group mb-2">
+                            <summary class="cursor-pointer font-medium text-slate-800 list-none flex justify-between items-center bg-white p-3 rounded shadow-sm">
+                                <span>Q: 照片上傳很久？</span>
+                                <i class="fas fa-chevron-down text-slate-400 group-open:rotate-180 transition"></i>
+                            </summary>
+                            <p class="text-slate-600 p-3 text-sm">A: 因系統需將照片轉存至雲端硬碟，請耐心等待約 3-5 秒，直到畫面顯示「登記成功」。</p>
+                        </details>
+                        <details class="group">
+                            <summary class="cursor-pointer font-medium text-slate-800 list-none flex justify-between items-center bg-white p-3 rounded shadow-sm">
+                                <span>Q: 提交後需要修改嗎？</span>
+                                <i class="fas fa-chevron-down text-slate-400 group-open:rotate-180 transition"></i>
+                            </summary>
+                            <p class="text-slate-600 p-3 text-sm">A: v0 版本暫不開放司機自行修改，若填錯請直接通知現場管理人員協助。</p>
+                        </details>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 4. 管理端操作 -->
+            <section id="admin" class="mb-16 scroll-mt-20">
+                <h2 class="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+                    <span class="w-2 h-8 bg-blue-600 rounded"></span> 4. 管理端操作說明
+                </h2>
+                
+                <div class="grid md:grid-cols-2 gap-6">
+                    <!-- Card 1 -->
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="bg-indigo-100 text-indigo-600 w-10 h-10 rounded-full flex items-center justify-center"><i class="fas fa-chart-line"></i></div>
+                            <h3 class="font-bold text-lg">戰情室 (Dashboard)</h3>
+                        </div>
+                        <p class="text-slate-600 text-sm mb-4">以「日」為單位，顯示 24 小時的車輛負載。</p>
+                        <div class="border-t pt-4">
+                            <h4 class="font-bold text-xs text-slate-500 uppercase mb-2">容量窗格範例</h4>
+                            <!-- Fake UI representing the grid -->
+                            <div class="border rounded p-2 bg-slate-50 text-center">
+                                <div class="text-xs font-bold text-slate-400 mb-1">09:00 - 10:00</div>
+                                <div class="flex gap-2 justify-center">
+                                    <span class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold border border-green-200">STD: 8/10</span>
+                                    <span class="bg-amber-100 text-amber-700 px-2 py-1 rounded text-xs font-bold border border-amber-200">PROJ: 1/5</span>
+                                </div>
+                            </div>
+                            <p class="text-xs text-slate-400 mt-2">* 紅色表示額滿，綠色表示有空位。</p>
+                        </div>
+                    </div>
+
+                    <!-- Card 2 -->
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="bg-indigo-100 text-indigo-600 w-10 h-10 rounded-full flex items-center justify-center"><i class="fas fa-list-ul"></i></div>
+                            <h3 class="font-bold text-lg">清單管理</h3>
+                        </div>
+                        <ul class="text-sm text-slate-600 space-y-3">
+                            <li class="flex items-start gap-2">
+                                <i class="fas fa-check text-green-500 mt-1"></i>
+                                <span><strong>查看詳情：</strong>點擊單號可查看完整資料與聯絡電話。</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fas fa-check text-green-500 mt-1"></i>
+                                <span><strong>檢視照片：</strong>支援縮圖預覽，亦可點擊連結開啟原始檔案。</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fas fa-check text-green-500 mt-1"></i>
+                                <span><strong>切換類型 (Re-Bucket)：</strong>若 STD 額滿，可將單據強制切換至 PROJ 池。</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 5. 系統邏輯 -->
+            <section id="logic" class="mb-16 scroll-mt-20">
+                <h2 class="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+                    <span class="w-2 h-8 bg-blue-600 rounded"></span> 5. 系統邏輯：容量分流
+                </h2>
+                
+                <div class="bg-white p-8 rounded-xl shadow-sm border border-slate-200 flex flex-col items-center">
+                    <p class="text-slate-600 mb-6 text-center max-w-2xl">
+                        本系統採用<strong>「雙軌容量 (Dual Bucket)」</strong>設計。STD 為主要預約池，PROJ 為例外管理/現場池，確保調度彈性。
+                    </p>
+
+                    <!-- SVG Logic Diagram -->
+                    <svg width="500" height="200" viewBox="0 0 500 200" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Bucket STD -->
+                        <g transform="translate(50, 20)">
+                            <rect x="0" y="40" width="100" height="120" rx="4" fill="white" stroke="#3B82F6" stroke-width="3"/>
+                            <!-- Water level -->
+                            <rect x="5" y="80" width="90" height="75" rx="2" fill="#DBEAFE"/>
+                            <text x="50" y="25" font-family="sans-serif" font-size="14" text-anchor="middle" font-weight="bold" fill="#1E40AF">STD 標準池</text>
+                            <text x="50" y="100" font-family="sans-serif" font-size="12" text-anchor="middle" fill="#1E40AF">一般預約</text>
+                        </g>
+
+                        <!-- Bucket PROJ -->
+                        <g transform="translate(350, 20)">
+                            <rect x="0" y="40" width="100" height="120" rx="4" fill="white" stroke="#D97706" stroke-width="3" stroke-dasharray="5,5"/>
+                            <!-- Water level -->
+                            <rect x="5" y="130" width="90" height="25" rx="2" fill="#FEF3C7"/>
+                            <text x="50" y="25" font-family="sans-serif" font-size="14" text-anchor="middle" font-weight="bold" fill="#92400E">PROJ 專案池</text>
+                            <text x="50" y="100" font-family="sans-serif" font-size="12" text-anchor="middle" fill="#92400E">現場/插單</text>
+                            <text x="50" y="120" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#92400E">(防爆緩衝)</text>
+                        </g>
+
+                        <!-- Arrows -->
+                        <path d="M160 100 L200 100" stroke="#94A3B8" stroke-width="2" marker-end="url(#arrowhead)"/>
+                        <rect x="200" y="85" width="100" height="30" rx="4" fill="#F1F5F9" stroke="#94A3B8"/>
+                        <text x="250" y="105" font-family="sans-serif" font-size="12" text-anchor="middle" fill="#475569">手動調度</text>
+                        <path d="M300 100 L340 100" stroke="#94A3B8" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+                    </svg>
+                </div>
+            </section>
+
+            <!-- 6. 限制與支援 -->
+            <section id="limits" class="mb-12 scroll-mt-20">
+                <h2 class="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+                    <span class="w-2 h-8 bg-blue-600 rounded"></span> 6. v0 版本限制
+                </h2>
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-6">
+                    <ul class="space-y-3 text-slate-700">
+                        <li class="flex items-start gap-3">
+                            <i class="fas fa-exclamation-circle text-amber-500 mt-1"></i>
+                            <div>
+                                <strong>無帳號體系：</strong>
+                                <p class="text-sm text-slate-600">目前不記錄操作人員 ID，所有變更視為「管理員」操作。</p>
+                            </div>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <i class="fas fa-exclamation-circle text-amber-500 mt-1"></i>
+                            <div>
+                                <strong>無自動辨識 (OCR)：</strong>
+                                <p class="text-sm text-slate-600">車牌 OCR 功能尚未啟用，目前依賴司機手動輸入與人工核對照片。</p>
+                            </div>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <i class="fas fa-exclamation-circle text-amber-500 mt-1"></i>
+                            <div>
+                                <strong>資料安全：</strong>
+                                <p class="text-sm text-slate-600">目前介面不提供刪除功能（防止誤刪），若需刪除錯誤單據，請聯絡 IT 人員。</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Footer -->
+            <footer class="mt-20 pt-8 border-t border-slate-200 text-center text-slate-500 text-sm pb-8">
+                <p class="font-bold mb-2">Copyright © 2026 Force Cheng</p>
+                <p>本系統與本說明文件為 Force Cheng 所設計之專有系統架構與方法論。</p>
+                <p>未經授權，不得複製、修改、散佈或用於商業用途。</p>
+            </footer>
+
+        </main>
+    </div>
+    
+    <button onclick="window.scrollTo({top: 0, behavior: 'smooth'})" class="fixed bottom-6 right-6 bg-slate-800 text-white w-12 h-12 rounded-full shadow-lg flex items-center justify-center hover:bg-slate-700 transition no-print z-50">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+</body>
+</html>
