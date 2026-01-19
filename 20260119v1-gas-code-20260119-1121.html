@@ -1,0 +1,500 @@
+<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><title>20260119v1-gas-code-20260119-1121.html</title></head><body><pre><code>/**
+ * ===================================================================
+ * Copyright (c) 2026 Force Cheng. All rights reserved.
+ * Created: 2026/1/17
+ * Last Updated: 2026/01/19 09:12
+ * System: Warehouse Vehicle Booking System (Backend API)
+ * License: Proprietary &amp; Confidential
+ * Contact: Force Cheng
+ * ===================================================================
+ */
+
+// ==========================================
+// 倉儲車輛預約系統 Backend v0.3.11 (ID with Hyphens &amp; Original Filename)
+// Base Version: v0.3.10
+// Changes: 
+// 1. booking_id format: YYYYMMDD-Seq-Rand (Added hyphens)
+// 2. filename format: {BookingID}-{OriginalFilename}
+// ==========================================
+
+// --- CONFIGURATION ---
+const SPREADSHEET_ID = SpreadsheetApp.getActiveSpreadsheet().getId();
+const SHEET_BOOKINGS = &quot;Bookings&quot;;
+const SHEET_ALLOC = &quot;BookingAllocations&quot;;
+const SHEET_CAP = &quot;CapacityWindows&quot;;
+const SHEET_CONFIG = &quot;Config&quot;;
+
+// Schema Definitions
+const HEADERS_BOOKINGS = [
+  &#039;booking_id&#039;, &#039;type&#039;, &#039;eta_datetime&#039;, &#039;stay_minutes&#039;, &#039;logistics_company&#039;, 
+  &#039;driver_name&#039;, &#039;plate_manual&#039;, &#039;phone&#039;, &#039;line_id&#039;, &#039;photo_file&#039;, 
+  &#039;attachment_files&#039;, &#039;cap_bucket&#039;, &#039;created_at_sys&#039;, &#039;upload_time_sys&#039;, 
+  &#039;upload_time_manual&#039;, &#039;customer_name&#039;, &#039;note&#039;, &#039;plate_ocr&#039;, &#039;plate_final&#039;, &#039;plate_match_status&#039;,
+  &#039;pallet_qty&#039;, &#039;client_ref_code&#039;
+];
+
+const HEADERS_ALLOC = [
+  &#039;allocation_id&#039;, &#039;booking_id&#039;, &#039;window_key&#039;, &#039;cap_bucket&#039;, &#039;alloc_units&#039;, &#039;created_at_sys&#039;
+];
+
+const HEADERS_CAP = [
+  &#039;window_key&#039;, &#039;date&#039;, &#039;window_start&#039;, &#039;window_end&#039;, &#039;slot_minutes&#039;, 
+  &#039;cap_std_max&#039;, &#039;cap_proj_max&#039;, &#039;is_active&#039;, &#039;note&#039;
+];
+
+// ==========================================
+// CORE API ENTRY POINTS
+// ==========================================
+
+function doGet(e) {
+  return ContentService.createTextOutput(&quot;Backend API Online. Use POST.&quot;).setMimeType(ContentService.MimeType.TEXT);
+}
+
+function doPost(e) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000); 
+    
+    const json = JSON.parse(e.postData.contents);
+    const action = json.action;
+    let result = {};
+
+    if (action === &#039;create_booking&#039;) {
+      result = handleCreateBooking(json.data);
+    } else if (action === &#039;login&#039;) {
+      result = handleAdminLogin(json.password);
+    } else if (action === &#039;get_admin_data&#039;) {
+      result = handleGetAdminData(json.date);
+    } else if (action === &#039;update_note&#039;) {
+      result = handleUpdateNote(json.key, json.val);
+    } else if (action === &#039;set_bucket&#039;) {
+      result = handleSetBucket(json.booking_id, json.new_cap_bucket);
+    } else if (action === &#039;set_capacity_limit&#039;) {
+      result = handleSetCapacityLimit(json.window_key, json.cap_std, json.cap_proj);
+    } else {
+      throw new Error(&quot;Unknown action: &quot; + action);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: &#039;error&#039;,
+      message: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ==========================================
+// BUSINESS LOGIC HANDLERS
+// ==========================================
+
+function handleCreateBooking(data) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheetBook = ss.getSheetByName(SHEET_BOOKINGS);
+  const sheetAlloc = ss.getSheetByName(SHEET_ALLOC);
+  
+  // [MODIFIED] 1. Generate Custom ID: YYYYMMDD-Seq-Rand
+  const now = new Date();
+  const dateStrId = Utilities.formatDate(now, &quot;GMT+8&quot;, &quot;yyyyMMdd&quot;); 
+  
+  // Sequence Logic
+  const props = PropertiesService.getScriptProperties();
+  const seqKey = &#039;SEQ_&#039; + dateStrId; 
+  let seqStr = props.getProperty(seqKey);
+  let seq = seqStr ? parseInt(seqStr) + 1 : 1;
+  props.setProperty(seqKey, seq.toString());
+  
+  const seqPart = (&quot;000&quot; + seq).slice(-3); 
+  const randPart = (&quot;000&quot; + Math.floor(Math.random() * 1000)).slice(-3); 
+  
+  // Format: 20260119-001-852
+  const bookingId = `${dateStrId}-${seqPart}-${randPart}`;
+
+  const sysTimeStr = Utilities.formatDate(now, ss.getSpreadsheetTimeZone(), &quot;yyyy-MM-dd HH:mm:ss&quot;);
+  
+  // 2. Capacity Logic
+  const etaDate = new Date(data.eta_datetime);
+  const dateStr = Utilities.formatDate(etaDate, ss.getSpreadsheetTimeZone(), &quot;yyyy-MM-dd&quot;);
+  const hour = parseInt(Utilities.formatDate(etaDate, ss.getSpreadsheetTimeZone(), &quot;HH&quot;));
+  const windowKey = `${dateStr}T${hour &lt; 10 ? &#039;0&#039;+hour : hour}`;
+  
+  let finalBucket = data.cap_bucket || &#039;std&#039;; 
+  const caps = getCapacityMap(ss, [windowKey]); 
+  const currentCap = caps[windowKey];
+
+  if (finalBucket === &#039;std&#039;) {
+    if (currentCap.std_used &gt;= currentCap.std_max) {
+      finalBucket = &#039;proj&#039;;
+    }
+  }
+
+  // [MODIFIED] 3. File Upload with BookingID-OriginalName
+  const rootFolderId = getConfigMap()[&#039;drive_root_folder_id&#039;];
+  const rootFolder = rootFolderId ? DriveApp.getFolderById(rootFolderId) : DriveApp.getRootFolder();
+  
+  const photoFolder = ensureSubFolder(rootFolder, &quot;BookingPhotos&quot;);
+  const attFolder = ensureSubFolder(rootFolder, &quot;BookingAttachments&quot;);
+
+  let photoUrl = &quot;&quot;;
+  if (data.photo) {
+    // Format: ID-OriginalName (e.g., 20260119-001-852-myphoto.jpg)
+    const finalName = `${bookingId}-${data.photo.name}`;
+    photoUrl = saveFileToDrive(finalName, data.photo.data, photoFolder);
+  }
+  
+  let attUrls = [];
+  if (data.attachments &amp;&amp; Array.isArray(data.attachments)) {
+    data.attachments.forEach((f) =&gt; {
+      // Format: ID-OriginalName
+      const finalName = `${bookingId}-${f.name}`;
+      attUrls.push(saveFileToDrive(finalName, f.data, attFolder));
+    });
+  }
+
+  // 4. Write Data
+  const bookingRow = mapPayloadToRow(HEADERS_BOOKINGS, {
+    ...data,
+    booking_id: bookingId, 
+    photo_file: photoUrl,
+    attachment_files: attUrls.join(&#039;|||&#039;),
+    cap_bucket: finalBucket,
+    created_at_sys: sysTimeStr,
+    upload_time_sys: sysTimeStr,
+    phone: `&#039;${data.phone}`, 
+    stay_minutes: data.stay_minutes || getConfigMap()[&#039;default_stay_minutes&#039;] || 60
+  });
+  sheetBook.appendRow(bookingRow);
+
+  const allocRow = mapPayloadToRow(HEADERS_ALLOC, {
+    allocation_id: Utilities.getUuid(), 
+    booking_id: bookingId, 
+    window_key: windowKey,
+    cap_bucket: finalBucket,
+    alloc_units: 1,
+    created_at_sys: sysTimeStr
+  });
+  sheetAlloc.appendRow(allocRow);
+  
+  ensureCapacityWindow(ss, windowKey, dateStr, hour);
+
+  return { status: &#039;success&#039;, data: { booking_id: bookingId, cap_bucket: finalBucket } };
+}
+
+function handleAdminLogin(pwd) {
+  const config = getConfigMap();
+  if (String(pwd) === String(config[&#039;admin_password&#039;])) {
+    return { status: &#039;success&#039; };
+  }
+  return { status: &#039;error&#039;, message: &#039;密碼錯誤&#039; };
+}
+
+function handleGetAdminData(dateStr) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  
+  const keys = [];
+  for(let i=0; i&lt;24; i++) {
+    keys.push(`${dateStr}T${i &lt; 10 ? &#039;0&#039;+i : i}`);
+  }
+  
+  const capMap = getCapacityMap(ss, keys);
+  const capacityGrid = keys.map(k =&gt; {
+    const h = parseInt(k.split(&#039;T&#039;)[1]);
+    const info = capMap[k];
+    return { window_key: k, hour: h, ...info };
+  });
+
+  const bookings = getBookingList(ss, dateStr);
+
+  return { status: &#039;success&#039;, capacity: capacityGrid, bookings: bookings };
+}
+
+function handleUpdateNote(key, val) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SHEET_CAP);
+  const data = sheet.getDataRange().getValues();
+  
+  const headers = data[0];
+  const idxKey = headers.indexOf(&#039;window_key&#039;);
+  const idxNote = headers.indexOf(&#039;note&#039;);
+
+  if(idxKey === -1 || idxNote === -1) return { status: &#039;error&#039;, message: &#039;Columns missing&#039; };
+
+  for(let i=1; i&lt;data.length; i++) {
+    if(String(data[i][idxKey]) === String(key)) {
+      sheet.getRange(i+1, idxNote+1).setValue(val);
+      return { status: &#039;success&#039; };
+    }
+  }
+  return { status: &#039;error&#039;, message: &#039;Key not found&#039; };
+}
+
+function handleSetBucket(bookingId, newBucket) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheetBook = ss.getSheetByName(SHEET_BOOKINGS);
+  const dataBook = sheetBook.getDataRange().getValues();
+  
+  const headers = dataBook[0];
+  const idxId = headers.indexOf(&#039;booking_id&#039;);
+  const idxBucket = headers.indexOf(&#039;cap_bucket&#039;);
+  const idxEta = headers.indexOf(&#039;eta_datetime&#039;);
+
+  if(idxId === -1 || idxBucket === -1) {
+    return { status: &#039;error&#039;, message: &#039;Critical columns missing in Bookings sheet&#039; };
+  }
+  
+  let bookingFound = false;
+  let bookingEta = null;
+  const targetId = String(bookingId).trim();
+
+  for(let i=1; i&lt;dataBook.length; i++) {
+    if(String(dataBook[i][idxId]).trim() === targetId) {
+      sheetBook.getRange(i+1, idxBucket+1).setValue(newBucket);
+      bookingFound = true;
+      if(idxEta !== -1) bookingEta = dataBook[i][idxEta];
+      break;
+    }
+  }
+  
+  if(!bookingFound) return { status: &#039;error&#039;, message: &#039;Booking ID not found&#039; };
+
+  const sheetAlloc = ss.getSheetByName(SHEET_ALLOC);
+  const dataAlloc = sheetAlloc.getDataRange().getValues();
+  const headersAlloc = dataAlloc[0];
+  const idxAllocBid = headersAlloc.indexOf(&#039;booking_id&#039;);
+  const idxAllocBucket = headersAlloc.indexOf(&#039;cap_bucket&#039;);
+
+  let allocUpdatedCount = 0;
+  
+  if(idxAllocBid !== -1 &amp;&amp; idxAllocBucket !== -1) {
+    for(let i=1; i&lt;dataAlloc.length; i++) {
+      if(String(dataAlloc[i][idxAllocBid]).trim() === targetId) {
+        sheetAlloc.getRange(i+1, idxAllocBucket+1).setValue(newBucket);
+        allocUpdatedCount++;
+      }
+    }
+  }
+  
+  if(allocUpdatedCount === 0 &amp;&amp; bookingEta) {
+    try {
+      const etaDate = new Date(bookingEta);
+      const dateStr = Utilities.formatDate(etaDate, ss.getSpreadsheetTimeZone(), &quot;yyyy-MM-dd&quot;);
+      const hour = parseInt(Utilities.formatDate(etaDate, ss.getSpreadsheetTimeZone(), &quot;HH&quot;));
+      const windowKey = `${dateStr}T${hour &lt; 10 ? &#039;0&#039;+hour : hour}`;
+      
+      const newAllocRow = mapPayloadToRow(HEADERS_ALLOC, {
+        allocation_id: Utilities.getUuid(),
+        booking_id: targetId,
+        window_key: windowKey,
+        cap_bucket: newBucket,
+        alloc_units: 1,
+        created_at_sys: Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), &quot;yyyy-MM-dd HH:mm:ss&quot;)
+      });
+      sheetAlloc.appendRow(newAllocRow);
+    } catch(e) { }
+  }
+  
+  return { status: &#039;success&#039; };
+}
+
+function handleSetCapacityLimit(windowKey, stdMax, projMax) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SHEET_CAP);
+  const data = sheet.getDataRange().getValues();
+  
+  const headers = data[0];
+  const idxKey = headers.indexOf(&#039;window_key&#039;);
+  const idxStd = headers.indexOf(&#039;cap_std_max&#039;);
+  const idxProj = headers.indexOf(&#039;cap_proj_max&#039;);
+
+  if(idxKey === -1 || idxStd === -1 || idxProj === -1) {
+    return { status: &#039;error&#039;, message: &#039;Capacity columns missing&#039; };
+  }
+  
+  const targetKey = String(windowKey).trim();
+
+  for(let i=1; i&lt;data.length; i++) {
+    if(String(data[i][idxKey]).trim() === targetKey) {
+      sheet.getRange(i+1, idxStd+1).setValue(stdMax);
+      sheet.getRange(i+1, idxProj+1).setValue(projMax);
+      return { status: &#039;success&#039; };
+    }
+  }
+
+  try {
+    const parts = targetKey.split(&#039;T&#039;);
+    if(parts.length !== 2) return { status: &#039;error&#039;, message: &#039;Invalid window key format&#039; };
+    
+    const dateStr = parts[0];
+    const hour = parseInt(parts[1]);
+    const config = getConfigMap();
+
+    const newRow = mapPayloadToRow(HEADERS_CAP, {
+      window_key: targetKey,
+      date: dateStr,
+      window_start: hour,
+      slot_minutes: config[&#039;default_slot_minutes&#039;] || 60,
+      cap_std_max: stdMax,
+      cap_proj_max: projMax,
+      is_active: true,
+      note: &#039;Admin-created&#039;
+    });
+    sheet.appendRow(newRow);
+    return { status: &#039;success&#039;, message: &#039;Slot created and updated&#039; };
+
+  } catch(e) {
+    return { status: &#039;error&#039;, message: &#039;Failed to create slot: &#039; + e.toString() };
+  }
+}
+
+// ==========================================
+// HELPERS
+// ==========================================
+
+function ensureSubFolder(parent, name) {
+  const folders = parent.getFoldersByName(name);
+  if (folders.hasNext()) {
+    return folders.next();
+  } else {
+    return parent.createFolder(name);
+  }
+}
+
+function mapPayloadToRow(headers, dataObj) {
+  return headers.map(h =&gt; {
+    return dataObj.hasOwnProperty(h) ? dataObj[h] : &quot;&quot;;
+  });
+}
+
+function ensureCapacityWindow(ss, key, date, hour) {
+  const sheet = ss.getSheetByName(SHEET_CAP);
+  const data = sheet.getDataRange().getValues();
+  const exists = data.some(r =&gt; String(r[0]).trim() === String(key).trim());
+  
+  if(!exists) {
+    const config = getConfigMap();
+    const row = mapPayloadToRow(HEADERS_CAP, {
+      window_key: key,
+      date: date,
+      window_start: hour,
+      slot_minutes: config[&#039;default_slot_minutes&#039;] || 60,
+      cap_std_max: config[&#039;default_cap_std_max&#039;] || 1, 
+      cap_proj_max: config[&#039;default_cap_proj_max&#039;] || 5, 
+      is_active: true,
+      note: &#039;Auto-created&#039;
+    });
+    sheet.appendRow(row);
+  }
+}
+
+function getCapacityMap(ss, keysToCheck) {
+  const allocSheet = ss.getSheetByName(SHEET_ALLOC);
+  const allocData = allocSheet.getDataRange().getValues();
+  
+  const capSheet = ss.getSheetByName(SHEET_CAP);
+  const capData = capSheet.getDataRange().getValues();
+  
+  const config = getConfigMap();
+  const defStd = parseInt(config[&#039;default_cap_std_max&#039;]) || 1; 
+  const defProj = parseInt(config[&#039;default_cap_proj_max&#039;]) || 5; 
+
+  const map = {};
+  
+  const hCap = capData[0];
+  const idxCapKey = hCap.indexOf(&#039;window_key&#039;);
+  const idxCapStd = hCap.indexOf(&#039;cap_std_max&#039;);
+  const idxCapProj = hCap.indexOf(&#039;cap_proj_max&#039;);
+  const idxCapNote = hCap.indexOf(&#039;note&#039;);
+
+  capData.forEach((row, i) =&gt; {
+    if(i===0) return;
+    if(idxCapKey === -1) return;
+    const rKey = String(row[idxCapKey]).trim();
+    if(keysToCheck.includes(rKey)) {
+      map[rKey] = { 
+        std_used: 0, proj_used: 0, 
+        std_max: (idxCapStd &gt; -1 &amp;&amp; row[idxCapStd] !== &quot;&quot;) ? row[idxCapStd] : defStd, 
+        proj_max: (idxCapProj &gt; -1 &amp;&amp; row[idxCapProj] !== &quot;&quot;) ? row[idxCapProj] : defProj,
+        note: (idxCapNote &gt; -1) ? row[idxCapNote] : &#039;&#039;
+      };
+    }
+  });
+  
+  keysToCheck.forEach(k =&gt; {
+    if(!map[k]) map[k] = { std_used:0, proj_used:0, std_max:defStd, proj_max:defProj, note:&#039;&#039; };
+  });
+
+  const hAlloc = allocData[0];
+  const idxAllocKey = hAlloc.indexOf(&#039;window_key&#039;);
+  const idxAllocBucket = hAlloc.indexOf(&#039;cap_bucket&#039;);
+
+  if(idxAllocKey &gt; -1 &amp;&amp; idxAllocBucket &gt; -1) {
+    allocData.forEach((row, i) =&gt; {
+      if(i===0) return;
+      const k = String(row[idxAllocKey]).trim();
+      const bucket = row[idxAllocBucket];
+      if(map[k]) {
+        if(bucket === &#039;std&#039;) map[k].std_used++;
+        if(bucket === &#039;proj&#039;) map[k].proj_used++;
+      }
+    });
+  }
+  
+  return map;
+}
+
+function getBookingList(ss, dateStr) {
+  const sheet = ss.getSheetByName(SHEET_BOOKINGS);
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const idxEta = headers.indexOf(&#039;eta_datetime&#039;);
+  
+  const res = [];
+  if(idxEta === -1) return res;
+
+  for(let i=1; i&lt;data.length; i++) {
+    const row = data[i];
+    const eta = new Date(row[idxEta]);
+    const rowDate = Utilities.formatDate(eta, ss.getSpreadsheetTimeZone(), &quot;yyyy-MM-dd&quot;);
+    
+    if(rowDate === dateStr) {
+      let obj = {};
+      headers.forEach((h, colIdx) =&gt; {
+        if(h.includes(&#039;time&#039;) || h.includes(&#039;date&#039;)) {
+          try {
+             obj[h] = Utilities.formatDate(new Date(row[colIdx]), ss.getSpreadsheetTimeZone(), &quot;yyyy-MM-dd HH:mm:ss&quot;);
+          } catch(e) { obj[h] = row[colIdx]; }
+        } else {
+          obj[h] = row[colIdx];
+        }
+      });
+      res.push(obj);
+    }
+  }
+  return res;
+}
+
+function getConfigMap() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_CONFIG);
+  if(!sheet) return {};
+  const data = sheet.getDataRange().getValues();
+  const map = {};
+  for(let i=1; i&lt;data.length; i++) {
+    map[data[i][0]] = data[i][1];
+  }
+  return map;
+}
+
+function saveFileToDrive(filename, base64Data, folder) {
+  try {
+    const decoded = Utilities.base64Decode(base64Data);
+    const blob = Utilities.newBlob(decoded, null, filename); 
+    const file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return file.getUrl(); 
+  } catch(e) {
+    return &quot;ERROR: &quot; + e.toString();
+  }
+}</code></pre></body></html>
