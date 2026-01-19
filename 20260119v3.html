@@ -1,0 +1,609 @@
+<!-- 
+  ===================================================================
+  Copyright (c) 2026 Force Cheng. All rights reserved.
+  Created: 2026/1/17
+  Last Updated: 2026/01/19 23:35 (Taipei Time)
+  System: Warehouse Vehicle Booking System (Frontend Client)
+  Version: V3-Stable-Fix (Advanced 4-way Sorting Logic)
+  
+  License: Proprietary & Confidential
+  Contact: Force Cheng
+  ===================================================================
+-->
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>倉儲車輛預約系統 | Updated: 01/19 23:35</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .spinner { border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top: 3px solid white; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        [v-cloak] { display: none; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes bounceIn { 0% { transform: scale(0.9); opacity: 0; } 60% { transform: scale(1.05); opacity: 1; } 100% { transform: scale(1); } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        .animate-bounce-in { animation: bounceIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        .modal-scroll::-webkit-scrollbar { width: 8px; }
+        .modal-scroll::-webkit-scrollbar-track { background-color: #f1f5f9; }
+        .modal-scroll::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans text-base">
+
+<div id="app" v-cloak class="min-h-screen flex flex-col">
+    <nav class="bg-slate-800 text-white p-4 sticky top-0 z-40 shadow-lg">
+        <div class="max-max-w-5xl mx-auto flex justify-between items-center w-full px-4 md:px-0">
+            <h1 class="font-bold text-lg tracking-wide"><i class="fa-solid fa-truck-fast mr-2"></i>倉儲預約系統</h1>
+            <div class="space-x-1 text-sm">
+                <span class="text-xs text-gray-400 mr-2">Updated: 01/19 23:35</span>
+                <button @click="view='driver'" :class="view==='driver'?'bg-slate-600 ring-2 ring-slate-400':''" class="px-3 py-2 rounded transition">司機</button>
+                <button @click="handleAdminClick" :class="(view==='admin'||view==='admin_login')?'bg-slate-600 ring-2 ring-slate-400':''" class="px-3 py-2 rounded transition">管理</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow w-full max-w-5xl mx-auto p-4 md:p-6 relative">
+        <div v-if="errorMsg" class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded shadow relative animate-bounce-in">
+            <p class="font-bold"><i class="fa-solid fa-triangle-exclamation mr-2"></i>錯誤</p>
+            <p>{{ errorMsg }}</p>
+            <button @click="errorMsg=''" class="absolute top-2 right-2 text-red-500"><i class="fa-solid fa-times"></i></button>
+        </div>
+
+        <!-- Driver Success Modal -->
+        <div v-if="showSuccessModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto">
+            <div class="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full animate-bounce-in my-8 relative">
+                <div class="text-center mb-4">
+                    <div v-if="!isAutoSwitchedToProj" class="w-16 h-16 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-3 text-3xl"><i class="fa-solid fa-check"></i></div>
+                    <div v-else class="w-16 h-16 bg-orange-100 text-orange-500 rounded-full flex items-center justify-center mx-auto mb-3 text-3xl"><i class="fa-solid fa-circle-exclamation"></i></div>
+                    
+                    <h3 class="text-2xl font-bold" :class="lastSubmittedData.type === 'walkin' ? 'text-red-600' : 'text-gray-800'">
+                        {{ lastSubmittedData.type === 'walkin' ? '現場排隊（專案掛號）' : '預約進場' }}登記完成
+                    </h3>
+                    
+                    <div v-if="isAutoSwitchedToProj" class="mt-2 bg-orange-50 border border-orange-200 text-orange-800 px-3 py-2 rounded text-sm text-left">
+                        <strong><i class="fa-solid fa-triangle-exclamation mr-1"></i> 注意：本時段標準名額已滿</strong><br>
+                        系統已自動將您轉為「專案掛號 (PROJ)」。請等候管理員進一步通知或安排。
+                    </div>
+                    <div v-else class="mt-1 text-sm text-gray-500">您的登記資料已成功上傳。</div>
+                </div>
+
+                <div class="bg-slate-50 rounded-lg p-4 text-sm border border-slate-200 space-y-2 text-left shadow-inner">
+                    <div class="flex justify-between border-b pb-1 border-slate-200">
+                        <span class="text-gray-500">預約單號</span>
+                        <span class="font-bold font-mono text-xs">{{ lastSubmittedData.booking_id }}</span>
+                    </div>
+                    <div class="flex justify-between border-b pb-1 border-slate-200">
+                        <span class="text-gray-500">預約時間</span>
+                        <span class="font-bold font-mono">{{ lastSubmittedData.eta_datetime ? formatTime(lastSubmittedData.eta_datetime, true) : '' }}</span>
+                    </div>
+                    <div class="flex justify-between border-b pb-1 border-slate-200">
+                        <span class="text-gray-500">車牌號碼</span>
+                        <span class="font-bold text-lg text-blue-800">{{ lastSubmittedData.plate_manual }}</span>
+                    </div>
+                    <div class="flex justify-between border-b pb-1 border-slate-200">
+                        <span class="text-gray-500">司機姓名</span>
+                        <span class="font-bold">{{ lastSubmittedData.driver_name }}</span>
+                    </div>
+                    <div class="flex justify-between border-b pb-1 border-slate-200">
+                        <span class="text-gray-500">聯絡電話</span>
+                        <span class="font-bold font-mono">{{ lastSubmittedData.phone }}</span>
+                    </div>
+                    <div class="flex justify-between border-b pb-1 border-slate-200">
+                        <span class="text-gray-500">物流公司</span>
+                        <span class="font-bold">{{ lastSubmittedData.logistics_company }}</span>
+                    </div>
+                    <div class="flex justify-between border-b pb-1 border-slate-200">
+                        <span class="text-gray-500">棧板數量</span>
+                        <span class="font-bold">{{ lastSubmittedData.pallet_qty }}</span>
+                    </div>
+                    <div class="flex justify-between border-b pb-1 border-slate-200">
+                        <span class="text-gray-500">酷澎代碼</span>
+                        <span class="font-bold">{{ lastSubmittedData.client_ref_code || '-' }}</span>
+                    </div>
+                    <div class="flex justify-between border-b pb-1 border-slate-200">
+                        <span class="text-gray-500">客戶名稱</span>
+                        <span class="font-bold">{{ lastSubmittedData.customer_name || '-' }}</span>
+                    </div>
+                    <div class="flex justify-between border-b pb-1 border-slate-200">
+                        <span class="text-gray-500">備註</span>
+                        <span class="font-bold">{{ lastSubmittedData.note || '無' }}</span>
+                    </div>
+                    
+                    <div class="pt-2">
+                        <span class="text-gray-500 block mb-2 font-bold text-xs">照片紀錄 (預覽)</span>
+                        <img v-if="previewPhotoUrl" :src="previewPhotoUrl" class="w-full h-auto rounded border border-gray-300 bg-white">
+                    </div>
+                </div>
+
+                <div class="flex gap-3 mt-6">
+                    <button @click="closeSuccessModal" class="flex-1 bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-lg shadow transition transform active:scale-95">
+                        確認關閉
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Driver View -->
+        <section v-if="view === 'driver'" class="animate-fade-in">
+            <div class="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200">
+                <div class="bg-blue-50 px-6 py-4 border-b border-blue-100 flex justify-between items-center">
+                    <div><h2 class="text-xl font-bold text-blue-900">司機報到登記</h2><p class="text-xs text-blue-600 mt-1">請如實填寫，標示 * 為必填</p></div>
+                    <button @click="fillDemo" class="text-xs bg-white border border-blue-200 text-blue-600 px-3 py-1.5 rounded shadow-sm hover:bg-blue-50 transition"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>範例</button>
+                </div>
+                <form @submit.prevent="submitBooking" class="p-6 space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">作業類型 <span class="text-red-500">*</span></label>
+                            <select v-model="form.type" class="w-full border rounded-md p-2.5 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none" required>
+                                <option value="reservation">預約進場</option>
+                                <option value="walkin">現場排隊</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">預計到達 (ETA) <span class="text-red-500">*</span></label>
+                            <div class="flex gap-2">
+                                <input type="date" v-model="form.eta_date" class="w-1/2 border rounded-md p-2.5 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none" required>
+                                <select v-model="form.eta_hour" class="w-1/4 border rounded-md p-2.5 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none font-mono text-center" required>
+                                    <option v-for="h in 24" :key="h-1" :value="(h-1).toString().padStart(2,'0')">{{ (h-1).toString().padStart(2,'0') }}時</option>
+                                </select>
+                                <select v-model="form.eta_minute" class="w-1/4 border rounded-md p-2.5 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none font-mono text-center" required>
+                                    <option v-for="m in 12" :key="m" :value="((m-1)*5).toString().padStart(2,'0')">{{ ((m-1)*5).toString().padStart(2,'0') }}分</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div><label class="block text-sm font-bold text-gray-700 mb-1">物流公司 <span class="text-red-500">*</span></label><input type="text" v-model="form.logistics_company" class="w-full border rounded-md p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" required placeholder="例如：新竹物流"></div>
+                        <div><label class="block text-sm font-bold text-gray-700 mb-1">車牌號碼 <span class="text-red-500">*</span></label><input type="text" v-model="form.plate_manual" class="w-full border rounded-md p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" required placeholder="ABC-1234"></div>
+                        <div><label class="block text-sm font-bold text-gray-700 mb-1">司機姓名 <span class="text-red-500">*</span></label><input type="text" v-model="form.driver_name" class="w-full border rounded-md p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" required></div>
+                        <div><label class="block text-sm font-bold text-gray-700 mb-1">聯絡電話 (手機) <span class="text-red-500">*</span></label><input type="text" v-model="form.phone" class="w-full border rounded-md p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" required placeholder="0912-345-678"></div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">棧板數量 <span class="text-red-500">*</span></label>
+                            <input type="number" v-model="form.pallet_qty" class="w-full border rounded-md p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="請輸入數量" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">酷澎代碼</label>
+                            <input type="text" v-model="form.client_ref_code" class="w-full border rounded-md p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="例如：CP-123">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-bold text-gray-700 mb-1">客戶名稱</label>
+                            <input type="text" v-model="form.customer_name" class="w-full border rounded-md p-2.5 focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">備註 (送貨單後３碼等)</label>
+                        <textarea v-model="form.note" class="w-full border rounded-md p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" rows="2" placeholder="請填寫補充資訊..."></textarea>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-md border border-gray-200">
+                        <label class="block text-sm font-bold text-gray-700 mb-2">📸 送貨單照片 (選填)</label>
+                        <input type="file" ref="photoInput" @change="handleFile($event, 'photo')" accept="image/*" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-600 file:text-white hover:file:bg-gray-700 cursor-pointer">
+                        <p class="text-xs text-gray-400 mt-1">若有紙本單據請拍照上傳，以利核對</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">其他附件 (最多10個)</label>
+                        <input type="file" ref="attInput" @change="handleFile($event, 'attachments')" multiple class="block w-full text-xs text-slate-500 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:bg-gray-200 file:text-gray-700">
+                    </div>
+                    <button type="submit" :disabled="loading" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-lg shadow-lg transition-transform active:scale-95 flex justify-center items-center text-lg"><span v-if="loading" class="spinner mr-2"></span><span v-else><i class="fa-solid fa-paper-plane mr-2"></i>提交登記</span></button>
+                </form>
+                <div class="mt-8 bg-slate-50 p-4 rounded-lg border-t border-slate-200">
+                    <h3 class="text-sm font-bold text-slate-600 mb-3"><i class="fa-solid fa-clock mr-1"></i> 即時空位查詢 (STD)</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <div class="text-xs font-bold text-slate-400 mb-1">今日 ({{ todayStr }})</div>
+                            <div class="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-12 gap-1">
+                                <div v-for="h in 24" :key="'t'+h" class="text-center p-1 rounded border text-[10px]" :class="getCapColor(driverCapacityToday[h-1])">
+                                    <div class="font-bold">{{ (h-1).toString().padStart(2,'0') }}:00</div>
+                                    <div>{{ getCapText(driverCapacityToday[h-1]) }}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="text-xs font-bold text-slate-400 mb-1">明日 ({{ tomorrowStr }})</div>
+                            <div class="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-12 gap-1">
+                                <div v-for="h in 24" :key="'tm'+h" class="text-center p-1 rounded border text-[10px]" :class="getCapColor(driverCapacityTomorrow[h-1])">
+                                    <div class="font-bold">{{ (h-1).toString().padStart(2,'0') }}:00</div>
+                                    <div>{{ getCapText(driverCapacityTomorrow[h-1]) }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Admin Login -->
+        <section v-if="view === 'admin_login'" class="animate-fade-in flex items-center justify-center py-10">
+            <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-sm border border-gray-100">
+                <div class="text-center mb-6"><div class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 text-white text-2xl"><i class="fa-solid fa-lock"></i></div><h2 class="text-xl font-bold text-slate-800">管理員登入</h2><p class="text-sm text-gray-500 mt-1">請輸入管理密碼以存取後台</p></div>
+                <form @submit.prevent="submitLogin"><div class="mb-6"><input type="password" v-model="adminPasswordInput" placeholder="請輸入密碼" class="w-full border-2 border-gray-200 rounded-lg p-3 text-center focus:border-slate-800 focus:outline-none transition text-lg tracking-widest" ref="loginInput" required></div><button type="submit" :disabled="loading" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-lg shadow transition transform active:scale-95"><span v-if="loading" class="spinner mr-2 inline-block align-middle" style="width:16px;height:16px;border-width:2px;"></span><span v-else>驗證登入</span></button></form>
+            </div>
+        </section>
+
+        <!-- Admin Dashboard -->
+        <section v-if="view === 'admin'" class="animate-fade-in space-y-6">
+            <div class="bg-white p-4 rounded-lg shadow flex flex-wrap items-center justify-between gap-4 sticky top-0 z-30 border-b border-gray-100">
+                <div class="flex items-center gap-3"><div class="text-slate-800 font-bold text-lg"><i class="fa-solid fa-chart-line mr-2"></i>戰情室</div><input type="date" v-model="adminDate" @change="fetchAdminData" class="border-2 border-slate-200 rounded-md p-1.5 bg-gray-50 font-bold focus:border-slate-500 outline-none"><button @click="fetchAdminData" class="w-8 h-8 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 flex items-center justify-center transition" title="重新整理"><i class="fa-solid fa-rotate-right" :class="{'fa-spin': loading}"></i></button></div>
+                <div class="text-xs font-bold flex gap-3 items-center"><span class="flex items-center bg-blue-50 px-2 py-1 rounded border border-blue-100"><div class="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>STD 一般</span><span class="flex items-center bg-purple-50 px-2 py-1 rounded border border-purple-100"><div class="w-2 h-2 bg-purple-500 rounded-full mr-2"></div>PROJ 專案</span><button @click="logout" class="ml-2 text-gray-400 hover:text-red-500 font-normal"><i class="fa-solid fa-sign-out-alt mr-1"></i>登出</button></div>
+            </div>
+            
+            <div class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-8 gap-2">
+                <template v-for="n in 24" :key="n-1">
+                    <div v-if="getSlot(n-1)" @click="openCapEdit(getSlot(n-1))" class="border rounded p-2 cursor-pointer hover:shadow-md transition relative overflow-hidden group min-h-[80px] flex flex-col justify-between" :class="[(editingSlot && editingSlot.hour === getSlot(n-1).hour) ? 'ring-2 ring-blue-400' : '', (Number(getSlot(n-1).cap_std) === 0) ? 'bg-purple-100' : 'bg-white']">
+                        <div class="text-xs font-bold text-gray-400 text-center mb-1">{{ getSlot(n-1).hour }}:00</div>
+                        <div class="mb-1"><div class="flex justify-between text-[10px] text-blue-800 font-bold leading-none mb-0.5"><span>S</span><span :class="getSlot(n-1).used_std > getSlot(n-1).cap_std ? 'text-red-600':''">{{ getSlot(n-1).used_std }}/{{ getSlot(n-1).cap_std }}</span></div><div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden"><div class="bg-blue-500 h-full rounded-full" :style="{width: pct(getSlot(n-1).used_std, getSlot(n-1).cap_std)+'%'}"></div></div></div>
+                        <div><div class="flex justify-between text-[10px] text-purple-800 font-bold leading-none mb-0.5"><span>P</span><span :class="getSlot(n-1).used_proj > getSlot(n-1).cap_proj ? 'text-red-600':''">{{ getSlot(n-1).used_proj }}/{{ getSlot(n-1).cap_proj }}</span></div><div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden"><div class="bg-purple-500 h-full rounded-full" :style="{width: pct(getSlot(n-1).used_proj, getSlot(n-1).cap_proj)+'%'}"></div></div></div>
+                    </div>
+                </template>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
+                <div class="bg-slate-50 px-4 py-3 border-b border-gray-200 font-bold text-sm text-slate-700 flex justify-between items-center">
+                    <span>當日預約清單 ({{ bookingList ? bookingList.length : 0 }}筆)</span>
+                    <div class="flex gap-2">
+                        <!-- Modified Sorting Button Cycle -->
+                        <button @click="toggleSortOrder" class="text-xs px-2 py-1 rounded bg-white border border-gray-300 hover:bg-gray-100 transition shadow-sm w-32 text-center font-mono">
+                            <i class="fa-solid fa-sort mr-1"></i>{{ getSortLabel() }}
+                        </button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left whitespace-nowrap">
+                        <thead class="bg-gray-100 text-gray-500 uppercase text-xs">
+                            <tr>
+                                <th class="px-4 py-3">預約單號</th>
+                                <th class="px-4 py-3">系統時間</th>
+                                <th class="px-4 py-3">預計到達</th>
+                                <th class="px-4 py-3">車號</th>
+                                <th class="px-4 py-3">司機 / 物流</th>
+                                <th class="px-4 py-3">Bucket</th>
+                                <th class="px-4 py-3 text-right">詳情</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <tr v-for="b in sortedBookingList" :key="b.id || b.booking_id" @click="viewDetail(b)" class="hover:bg-blue-50 transition cursor-pointer group">
+                                <td class="px-4 py-3 font-mono text-xs text-gray-500">{{ b.booking_id }}</td>
+                                <td class="px-4 py-3 font-mono text-xs text-gray-500">{{ formatTime(b.created_at_sys || b.upload_time_sys, true) }}</td>
+                                <td class="px-4 py-3 font-mono text-gray-600 font-bold">{{ formatTime(b.eta_datetime) }}</td>
+                                <td class="px-4 py-3"><div class="font-bold text-gray-800">{{ b.plate_final || b.plate_manual }}</div></td>
+                                <td class="px-4 py-3">
+                                    <div class="text-sm font-bold text-gray-700">{{ b.driver_name }}</div>
+                                    <div class="text-xs text-gray-500">{{ b.logistics_company }}</div>
+                                </td>
+                                <td class="px-4 py-3" @click.stop>
+                                    <button @click="toggleBucket(b)" :class="b.cap_bucket==='std' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-purple-100 text-purple-700 border-purple-200'" class="px-2 py-1 rounded border text-xs font-bold hover:opacity-80 transition shadow-sm w-16">{{ b.cap_bucket ? b.cap_bucket.toUpperCase() : 'STD' }}</button>
+                                </td>
+                                <td class="px-4 py-3 text-right"><i class="fa-solid fa-chevron-right text-gray-400"></i></td>
+                            </tr>
+                            <tr v-if="!sortedBookingList.length"><td colspan="7" class="p-8 text-center text-gray-400">尚無預約資料</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Capacity Edit Modal -->
+            <div v-if="editingSlot" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div class="bg-white rounded-xl p-6 w-full max-w-xs shadow-2xl animate-fade-in-up">
+                    <h3 class="text-lg font-bold mb-4 text-center border-b pb-2">調整容量 ({{ editingSlot.hour }}:00)</h3>
+                    <div class="space-y-4">
+                        <div><label class="block text-xs font-bold text-blue-800 mb-1">STD (一般) 上限</label><input type="number" v-model.number="tempCap.std" class="w-full border-2 border-blue-100 rounded-lg p-2 text-center text-lg font-bold text-blue-600 focus:border-blue-500 outline-none"></div>
+                        <div><label class="block text-xs font-bold text-purple-800 mb-1">PROJ (專案) 上限</label><input type="number" v-model.number="tempCap.proj" class="w-full border-2 border-purple-100 rounded-lg p-2 text-center text-lg font-bold text-purple-600 focus:border-purple-500 outline-none"></div>
+                        <div class="flex gap-2 mt-6">
+                            <button @click="editingSlot=null" class="flex-1 py-2 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg font-bold">取消</button>
+                            <button @click="saveCap" class="flex-1 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 font-bold shadow-lg">儲存</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin Detail Modal -->
+            <div v-if="selectedBooking" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="selectedBooking=null">
+                <div class="bg-white rounded-xl w-full max-w-md shadow-2xl animate-bounce-in max-h-[90vh] flex flex-col overflow-hidden">
+                    <div class="p-4 border-b flex justify-between items-center bg-slate-800 text-white">
+                        <h3 class="text-lg font-bold">
+                            <i class="fa-solid fa-circle-info mr-2"></i>預約詳情 <span class="bg-white/20 text-white text-[10px] px-2 py-0.5 rounded ml-2 font-normal">管理者介面</span>
+                        </h3>
+                        <button @click="selectedBooking=null" class="text-white/60 hover:text-white transition"><i class="fa-solid fa-times"></i></button>
+                    </div>
+                    <div class="p-6 overflow-y-auto modal-scroll space-y-4">
+                        <div class="text-center mb-4 pt-2">
+                            <h3 class="text-xl font-bold" :class="selectedBooking.type === 'walkin' ? 'text-red-600' : 'text-gray-800'">
+                                {{ selectedBooking.type === 'walkin' ? '現場排隊（專案掛號）' : '預約進場' }}
+                            </h3>
+                            <div class="text-[10px] text-gray-400">詳細登記資訊</div>
+                        </div>
+                        <div class="bg-slate-50 rounded-lg p-4 text-sm border border-slate-200 space-y-2 text-left shadow-inner">
+                            <div class="flex justify-between border-b pb-1 border-slate-200"><span class="text-gray-500">預約單號</span><span class="font-bold font-mono text-xs">{{ selectedBooking.booking_id }}</span></div>
+                            <div class="flex justify-between border-b pb-1 border-slate-200"><span class="text-gray-500">預約時間</span><span class="font-bold font-mono">{{ selectedBooking.eta_datetime ? formatTime(selectedBooking.eta_datetime, true) : '' }}</span></div>
+                            <div class="flex justify-between border-b pb-1 border-slate-200"><span class="text-gray-500">車牌號碼</span><span class="font-bold text-lg text-blue-800">{{ selectedBooking.plate_manual }}</span></div>
+                            <div class="flex justify-between border-b pb-1 border-slate-200"><span class="text-gray-500">司機姓名</span><span class="font-bold">{{ selectedBooking.driver_name }}</span></div>
+                            <div class="flex justify-between border-b pb-1 border-slate-200"><span class="text-gray-500">聯絡電話</span><span class="font-bold font-mono">{{ selectedBooking.phone }}</span></div>
+                            <div class="flex justify-between border-b pb-1 border-slate-200"><span class="text-gray-500">物流公司</span><span class="font-bold">{{ selectedBooking.logistics_company }}</span></div>
+                            <div class="flex justify-between border-b pb-1 border-slate-200"><span class="text-gray-500">棧板數量</span><span class="font-bold">{{ selectedBooking.pallet_qty }}</span></div>
+                            <div class="flex justify-between border-b pb-1 border-slate-200"><span class="text-gray-500">酷澎代碼</span><span class="font-bold">{{ selectedBooking.client_ref_code || '-' }}</span></div>
+                            <div class="flex justify-between border-b pb-1 border-slate-200"><span class="text-gray-500">客戶名稱</span><span class="font-bold">{{ selectedBooking.customer_name || '-' }}</span></div>
+                            <div class="flex justify-between border-b pb-1 border-slate-200"><span class="text-gray-500">備註</span><span class="font-bold">{{ selectedBooking.note || '無' }}</span></div>
+                        </div>
+                        <div class="pt-2 border-t border-slate-200">
+                            <span class="text-gray-500 block mb-2 text-xs font-bold">送貨單/現場照片 (點擊開啟原圖)</span>
+                            <div v-if="selectedBooking.photo_file" class="text-center">
+                                <a :href="selectedBooking.photo_file" target="_blank" class="block border rounded p-1 hover:border-blue-400 transition group relative overflow-hidden bg-white">
+                                    <img :src="getDriveImgUrl(selectedBooking.photo_file)" class="w-full h-auto rounded max-h-[150px] object-contain">
+                                    <div class="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition flex items-center justify-center"><div class="bg-white/80 p-2 rounded-full text-blue-600 shadow-md"><i class="fa-solid fa-external-link-alt"></i></div></div>
+                                </a>
+                            </div>
+                            <div v-else class="text-xs text-gray-400 bg-gray-50 p-2 rounded text-center">無照片</div>
+                        </div>
+                    </div>
+                    <div class="p-4 border-t bg-gray-50 flex gap-3">
+                        <button @click="openPrintView(selectedBooking, selectedBooking.photo_file)" class="flex-1 bg-white hover:bg-slate-100 text-slate-700 font-bold py-2.5 rounded-lg border border-slate-300 transition flex items-center justify-center transform active:scale-95"><i class="fa-solid fa-print mr-2"></i>補印單據</button>
+                        <button @click="toggleBucket(selectedBooking); selectedBooking.cap_bucket = (selectedBooking.cap_bucket==='std'?'proj':'std')" class="flex-1 py-2.5 rounded-lg font-bold shadow-sm transition text-white transform active:scale-95" :class="selectedBooking.cap_bucket==='std' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-blue-600 hover:bg-blue-700'"><i class="fa-solid fa-exchange-alt mr-2"></i>轉為 {{ selectedBooking.cap_bucket==='std' ? 'PROJ' : 'STD' }}</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div v-if="loading" class="fixed inset-0 bg-white/80 z-[100] flex flex-col justify-center items-center backdrop-blur-[2px]"><div class="spinner border-slate-300 border-t-slate-800 mb-3" style="width:40px;height:40px;border-width:4px;"></div><div class="text-slate-800 font-bold animate-pulse">{{ loadingText }}</div></div>
+    <div class="text-center py-2 text-xs text-gray-400 px-4">System Updated: 2026/01/19 23:35 | (c) 2026 Force Cheng</div>
+</div>
+
+<script>
+const { createApp, ref, reactive, onMounted, nextTick, computed } = Vue;
+createApp({
+    setup() {
+        const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbzYPBlKcjmeiMScYaJ5pbnAFde2OXakKojRzE1457sUVHRXPDRb1pIkSB680lbiDp9Q/exec'; 
+        
+        const view = ref('driver');
+        const loading = ref(false);
+        const loadingText = ref('處理中...');
+        const errorMsg = ref('');
+        const showSuccessModal = ref(false);
+        const isAutoSwitchedToProj = ref(false);
+        const lastSubmittedData = ref({});
+        const previewPhotoUrl = ref('');
+        const adminDate = ref(''); 
+        
+        const isAdminLoggedIn = ref(false);
+        const adminPasswordInput = ref('');
+        const loginInput = ref(null);
+
+        const driverCapacityToday = ref([]);
+        const driverCapacityTomorrow = ref([]);
+        const todayStr = ref('');
+        const tomorrowStr = ref('');
+
+        const form = reactive({ 
+            type: 'reservation', eta_date: '', eta_hour: '09', eta_minute: '00', eta_datetime: '', logistics_company: '', driver_name: '', plate_manual: '', phone: '', line_id: '', stay_minutes: 60, pallet_qty: '', client_ref_code: '', customer_name: '', note: '' 
+        });
+        
+        const files = reactive({ photo: null, attachments: [] });
+        const photoInput = ref(null);
+        const attInput = ref(null);
+
+        const capacityGrid = ref({});
+        const bookingList = ref([]);
+        const editingSlot = ref(null);
+        const selectedBooking = ref(null); 
+        const tempCap = reactive({ std: 10, proj: 10 });
+        
+        // Sorting State: cycle through 4 modes
+        const sortMode = ref('update_desc'); 
+
+        const getTaiwanDate = () => {
+            const now = new Date();
+            const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+            return new Date(utc + (3600000 * 8));
+        };
+
+        const formatDateStr = (dateObj) => {
+            const y = dateObj.getFullYear();
+            const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const d = String(dateObj.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        };
+
+        const getDriveImgUrl = (url) => {
+            if (!url) return '';
+            if (!url.includes('drive.google.com')) return url;
+            try {
+                const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/id=([a-zA-Z0-9_-]+)/);
+                if (match && match[1]) return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1000`;
+            } catch (e) { console.error(e); }
+            return url;
+        };
+
+        const callApi = async (payload) => {
+            const res = await fetch(API_BASE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            });
+            const json = await res.json();
+            if(json.status === 'error' || json.success === false) throw new Error(json.message);
+            return json;
+        };
+
+        const fileToBase64 = (file) => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result.split(',')[1]); 
+            reader.onerror = reject;
+        });
+
+        const handleFile = (e, type) => {
+            if(type === 'photo') files.photo = e.target.files[0];
+            else files.attachments = Array.from(e.target.files).slice(0, 10);
+        };
+
+        const fillDemo = () => {
+            const twTime = getTaiwanDate();
+            form.eta_date = formatDateStr(twTime);
+            form.eta_hour = '10'; form.eta_minute = '30'; 
+            const r = Math.floor(Math.random()*999); const r2 = Math.floor(Math.random()*100);
+            form.logistics_company = `新竹物流-${r}`; form.driver_name = `王小明-${r2}`; form.plate_manual = `ABC-${r}`; form.phone = `0911-${r}-${r2}`; form.pallet_qty = Math.floor(Math.random() * 20) + 1; form.client_ref_code = `CP-${r}`; form.line_id = `line-${r}`; form.customer_name = `客戶-${r2}`; form.note = `送貨單後三碼: ${r}`;
+            errorMsg.value = '';
+        };
+
+        const submitBooking = async () => {
+            if(!form.pallet_qty) { errorMsg.value = "請輸入棧板數量"; return; }
+            loading.value = true; loadingText.value = "檢查容量並上傳中...";
+            errorMsg.value = '';
+            try {
+                const finalEta = `${form.eta_date}T${form.eta_hour}:${form.eta_minute}:00`;
+                const dateStr = form.eta_date; const hour = form.eta_hour; const key = `${dateStr}T${hour}`; 
+                const capRes = await callApi({ action: 'get_admin_data', date: dateStr });
+                let slot = null; if (capRes.capacity && Array.isArray(capRes.capacity)) slot = capRes.capacity.find(s => s.window_key === key);
+                if (slot && (slot.std_max === 0 || slot.std_max === '0')) { alert(`很抱歉，${dateStr} ${hour}:00 時段暫不開放，請重新選擇時間。`); loading.value = false; return; }
+                let forcedBucket = 'std'; isAutoSwitchedToProj.value = false;
+                if (form.type === 'walkin') forcedBucket = 'proj';
+                else if (slot && slot.std_used >= slot.std_max) { forcedBucket = 'proj'; isAutoSwitchedToProj.value = true; }
+                let photoB64 = null; if(files.photo) photoB64 = await fileToBase64(files.photo);
+                const attB64s = []; for(let f of files.attachments) attB64s.push({ name: f.name, data: await fileToBase64(f) });
+                const payload = { action: 'create_booking', data: { ...form, eta_datetime: finalEta, cap_bucket: forcedBucket, photo: photoB64 ? { name: files.photo.name, data: photoB64 } : null, attachments: attB64s } };
+                const res = await callApi(payload);
+                if(files.photo) previewPhotoUrl.value = URL.createObjectURL(files.photo); else previewPhotoUrl.value = '';
+                lastSubmittedData.value = { ...form, eta_datetime: finalEta, cap_bucket: forcedBucket, booking_id: res.data.booking_id };
+                Object.assign(form, { logistics_company: '', driver_name: '', plate_manual: '', phone: '', line_id: '', note: '', pallet_qty: '', client_ref_code: '', customer_name: '', eta_date: formatDateStr(getTaiwanDate()), eta_hour: '09', eta_minute: '00', stay_minutes: 60 });
+                if(photoInput.value) photoInput.value.value = ''; if(attInput.value) attInput.value.value = '';
+                files.photo = null; files.attachments = []; fetchDriverCapacity(); showSuccessModal.value = true;
+            } catch (e) { errorMsg.value = "提交失敗: " + e.message; } finally { loading.value = false; }
+        };
+        
+        const closeSuccessModal = () => { showSuccessModal.value = false; previewPhotoUrl.value = ''; };
+
+        const openPrintView = (data, photoUrl) => {
+            const printWindow = window.open('', '_blank');
+            const formattedTime = formatTime(data.eta_datetime, true);
+            const displayUrl = getDriveImgUrl(photoUrl);
+            const isProj = data.cap_bucket === 'proj';
+            const pageTitle = isProj ? '專案掛號憑證' : '預約報到憑證';
+            const statusBadge = isProj ? '<span style="background:#f3e8ff; color:#7e22ce; padding:4px 8px; border-radius:4px; font-size:12px; border:1px solid #d8b4fe;">專案掛號 PROJ</span>' : '<span style="background:#dbeafe; color:#1d4ed8; padding:4px 8px; border-radius:4px; font-size:12px; border:1px solid #93c5fd;">一般預約 STD</span>';
+            const alertBox = isProj ? `<div style="margin-bottom:20px; padding:15px; background-color:#faf5ff; border:2px dashed #a855f7; color:#6b21a8; font-weight:bold; text-align:center; border-radius:8px;">特殊/專案掛號提醒<br><span style="font-size:14px; font-weight:normal; color:#581c87;">本時段標準車位已滿或為現場掛號，請等候調度。</span></div>` : `<div style="margin-bottom:20px; padding:15px; background-color:#f0f9ff; border:1px solid #bae6fd; color:#0369a1; text-align:center; border-radius:8px;">預約確認<br><span style="font-size:14px; font-weight:normal;">系統已保留您的時段，請準時抵達。</span></div>`;
+            const htmlContent = `<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><title>${pageTitle} - ${data.plate_manual}</title><script src="https://cdn.tailwindcss.com"><\/script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"><style>@page { size: A4 portrait; margin: 1.5cm; } body { font-family: sans-serif; background-color: white; padding: 0; color: #1e293b; } .print-container { width: 100%; max-width: 800px; margin: 0 auto; border: 2px solid #333; padding: 25px; border-radius: 8px; box-sizing: border-box; } .header { text-align: center; border-bottom: 2px solid #ddd; padding-bottom: 15px; margin-bottom: 15px; } .grid-row { display: flex; justify-content: space-between; border-bottom: 1px solid #f1f5f9; padding: 10px 0; align-items: center; font-size: 14px; } .label { font-weight: bold; color: #64748b; width: 130px; } .value { font-weight: bold; color: #1e293b; flex: 1; text-align: right; } .photo-box { margin-top: 15px; text-align: center; border: 1px solid #e2e8f0; padding: 10px; border-radius: 6px; } .photo-box img { max-width: 100%; max-height: 150px; height: auto; border-radius: 4px; object-fit: contain; } @media print { body { padding: 0; } .print-container { border: none; padding: 0; } .no-print { display: none; } }</style></head><body><div class="print-container"><div class="header"><h1>${pageTitle}</h1>${statusBadge}<p style="margin-top:10px;">列印時間：${new Date().toLocaleString()}</p></div>${alertBox}<div class="grid-row"><span class="label">預約單號</span><span class="value font-mono">${data.booking_id || '-'}</span></div><div class="grid-row"><span class="label">預約時間</span><span class="value font-mono">${formattedTime}</span></div><div class="grid-row"><span class="label">物流公司</span><span class="value">${data.logistics_company}</span></div><div class="grid-row"><span class="label">車牌號碼</span><span class="value text-lg">${data.plate_manual}</span></div><div class="grid-row"><span class="label">司機姓名</span><span class="value">${data.driver_name}</span></div><div class="grid-row"><span class="label">聯絡電話</span><span class="value font-mono">${data.phone}</span></div><div class="grid-row"><span class="label">棧板數量</span><span class="value">${data.pallet_qty}</span></div><div class="grid-row"><span class="label">酷澎代碼</span><span class="value">${data.client_ref_code || '-'}</span></div><div class="grid-row"><span class="label">客戶名稱</span><span class="value">${data.customer_name || '-'}</span></div><div class="grid-row"><span class="label">備註事項</span><span class="value">${data.note || '無'}</span></div><div class="photo-box"><div style="font-weight:bold; margin-bottom:5px; color:#475569; font-size:12px;">送貨單/現場照片</div>${displayUrl ? `<a href="${photoUrl}" target="_blank"><img src="${displayUrl}" referrerpolicy="no-referrer"></a>` : '<div style="color:#94a3b8; padding:20px;">無照片資料</div>'}</div></div><div class="fixed bottom-4 right-4 no-print flex gap-2"><button onclick="window.print()" class="bg-blue-600 text-white px-6 py-3 rounded-full shadow-lg font-bold hover:bg-blue-700 transition">列印本頁</button><button onclick="window.close()" class="bg-gray-500 text-white px-6 py-3 rounded-full shadow-lg font-bold hover:bg-gray-600 transition">關閉</button></div></body></html>`;
+            printWindow.document.write(htmlContent); printWindow.document.close();
+        };
+
+        const handleAdminClick = () => {
+            if (isAdminLoggedIn.value) switchToAdmin(); 
+            else { view.value = 'admin_login'; errorMsg.value = ''; nextTick(() => { if(loginInput.value) loginInput.value.focus(); }); }
+        };
+
+        const submitLogin = async () => {
+            loading.value = true; errorMsg.value = '';
+            try { await callApi({ action: 'login', password: adminPasswordInput.value }); isAdminLoggedIn.value = true; adminPasswordInput.value = ''; switchToAdmin(); } catch(e) { errorMsg.value = "登入失敗: " + e.message; } finally { loading.value = false; }
+        };
+
+        const logout = () => { isAdminLoggedIn.value = false; view.value = 'driver'; };
+        const switchToAdmin = () => { view.value = 'admin'; fetchAdminData(); };
+
+        const fetchAdminData = async () => {
+            loading.value = true;
+            try {
+                const res = await callApi({ action: 'get_admin_data', date: adminDate.value });
+                const gridMap = {};
+                if(res.capacity && Array.isArray(res.capacity)) {
+                    res.capacity.forEach(item => { gridMap[item.window_key] = { ...item, used_std: item.std_used, cap_std: item.std_max, used_proj: item.proj_used, cap_proj: item.proj_max }; });
+                }
+                capacityGrid.value = gridMap; bookingList.value = Array.isArray(res.bookings) ? res.bookings : [];
+            } catch (e) { errorMsg.value = "讀取失敗: " + e.message; } finally { loading.value = false; }
+        };
+
+        // NEW: Multi-dimension sorting logic
+        const sortedBookingList = computed(() => {
+            if (!bookingList.value) return [];
+            return [...bookingList.value].sort((a, b) => {
+                const tUpdateA = a.created_at_sys || a.upload_time_sys || '';
+                const tUpdateB = b.created_at_sys || b.upload_time_sys || '';
+                const tEtaA = a.eta_datetime || '';
+                const tEtaB = b.eta_datetime || '';
+
+                switch (sortMode.value) {
+                    case 'update_desc': return tUpdateB.localeCompare(tUpdateA);
+                    case 'update_asc': return tUpdateA.localeCompare(tUpdateB);
+                    case 'eta_desc': return tEtaB.localeCompare(tEtaA);
+                    case 'eta_asc': return tEtaA.localeCompare(tEtaB);
+                    default: return 0;
+                }
+            });
+        });
+
+        // NEW: Cycle through 4 sorting modes
+        const toggleSortOrder = () => {
+            const cycle = ['update_desc', 'update_asc', 'eta_desc', 'eta_asc'];
+            const idx = cycle.indexOf(sortMode.value);
+            sortMode.value = cycle[(idx + 1) % cycle.length];
+        };
+
+        const getSortLabel = () => {
+            switch (sortMode.value) {
+                case 'update_desc': return '更新 ↓'; 
+                case 'update_asc': return '更新 ↑'; 
+                case 'eta_desc': return '預約 ↓'; 
+                case 'eta_asc': return '預約 ↑'; 
+            }
+        };
+
+        const toggleBucket = async (item) => {
+            const newBucket = (item.cap_bucket || 'std') === 'std' ? 'proj' : 'std';
+            loading.value = true;
+            try { await callApi({ action: 'set_bucket', booking_id: item.booking_id, new_cap_bucket: newBucket }); item.cap_bucket = newBucket; await fetchAdminData(); } catch(e) { alert(e.message); } finally { loading.value = false; }
+        };
+
+        const getSlot = (hour) => { const key = adminDate.value + 'T' + String(hour).padStart(2, '0'); return capacityGrid.value[key] || null; };
+        const openCapEdit = (slot) => { editingSlot.value = slot; tempCap.std = slot.cap_std; tempCap.proj = slot.cap_proj; };
+        const saveCap = async () => {
+            loading.value = true;
+            try { await callApi({ action: 'set_capacity_limit', window_key: editingSlot.value.window_key, cap_std: tempCap.std, cap_proj: tempCap.proj }); editingSlot.value = null; await fetchAdminData(); } catch(e) { alert(e.message); } finally { loading.value = false; }
+        };
+
+        const viewDetail = (booking) => { selectedBooking.value = booking; };
+        
+        const formatTime = (isoString, showFull = false) => {
+            if (!isoString) return '--:--';
+            try { 
+                const d = new Date(isoString); if (isNaN(d.getTime())) return isoString; 
+                if (showFull) return `${d.getMonth()+1}/${d.getDate()} ${d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+                return d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false }); 
+            } catch (e) { return isoString; }
+        };
+        
+        const parseAttachments = (attStr) => { if(!attStr) return []; return attStr.split('|||').map((item, idx) => ({ name: `附件 ${idx+1}`, url: item })); };
+        const pct = (u, c) => Math.min(100, (c > 0 ? (u/c)*100 : 0));
+
+        const fetchDriverCapacity = async () => {
+            const twNow = getTaiwanDate(); todayStr.value = formatDateStr(twNow);
+            const tomorrow = new Date(twNow); tomorrow.setDate(tomorrow.getDate() + 1); tomorrowStr.value = formatDateStr(tomorrow);
+            try {
+                const [resToday, resTomorrow] = await Promise.all([ callApi({ action: 'get_admin_data', date: todayStr.value }), callApi({ action: 'get_admin_data', date: tomorrowStr.value }) ]);
+                const mapToArr = (caps) => { const arr = new Array(24).fill(null); if(caps) caps.forEach(c => { if(c.hour >= 0 && c.hour < 24) arr[c.hour] = c; }); return arr; };
+                driverCapacityToday.value = mapToArr(resToday.capacity); driverCapacityTomorrow.value = mapToArr(resTomorrow.capacity);
+            } catch(e) { console.error(e); }
+        };
+
+        const getCapText = (slot) => {
+            if(!slot) return '-';
+            if(Number(slot.std_max) === 0 || slot.std_max === '0') return '關閉';
+            const left = slot.std_max - slot.std_used; return left > 0 ? `餘 ${left}` : '滿';
+        };
+
+        const getCapColor = (slot) => {
+            if(!slot) return 'bg-gray-100 text-gray-400';
+            if(Number(slot.std_max) === 0 || slot.std_max === '0') return 'bg-purple-100 text-purple-600 border-purple-200';
+            const left = slot.std_max - slot.std_used;
+            if(left <= 0) return 'bg-red-100 text-red-600 border-red-200 font-bold';
+            if(left <= 2) return 'bg-orange-100 text-orange-600 border-orange-200';
+            return 'bg-green-100 text-green-600 border-green-200';
+        };
+
+        onMounted(() => { const twNow = getTaiwanDate(); form.eta_date = formatDateStr(twNow); adminDate.value = formatDateStr(twNow); fetchDriverCapacity(); });
+
+        return {
+            view, loading, loadingText, errorMsg, showSuccessModal, form, files, photoInput, attInput, adminDate, capacityGrid, bookingList, sortedBookingList, editingSlot, tempCap, selectedBooking, isAdminLoggedIn, adminPasswordInput, loginInput, isAutoSwitchedToProj, lastSubmittedData, previewPhotoUrl, sortMode, driverCapacityToday, driverCapacityTomorrow, todayStr, tomorrowStr, getCapText, getCapColor, fetchDriverCapacity, fillDemo, handleFile, submitBooking, closeSuccessModal, openPrintView, handleAdminClick, submitLogin, logout, switchToAdmin, fetchAdminData, toggleBucket, openCapEdit, saveCap, viewDetail, pct, formatTime, parseAttachments, getSlot, toggleSortOrder, getSortLabel, getDriveImgUrl 
+        };
+    }
+}).mount('#app');
+</script>
+</body>
+</html>
