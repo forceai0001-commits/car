@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CP 倉儲車輛預約系統部署手冊 v2.0 | Canvas 導讀版</title>
+    <style>
+        /* --- 基礎設定 (Reset & Variables) --- */
+        :root {
+            --g-blue: #4285F4;
+            --g-red: #EA4335;
+            --g-yellow: #FBBC05;
+            --g-green: #34A853;
+            --g-gray: #5f6368;
+            --text-main: #202124;
+            
+            /* 預設背景色 (會隨角色改變) */
+            --bg-light: #f8f9fa;
+            /* 預設角色顏色 (會隨角色改變) */
+            --role-color: var(--g-blue);
+        }
+
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-main);
+            background-color: var(--bg-light); /* 使用變數 */
+            margin: 0;
+            padding: 0;
+            padding-bottom: 60px; /* Footer space */
+            transition: background-color 0.5s ease; /* 背景色切換動畫 */
+        }
+
+        /* --- 角色主題定義 (核心修改) --- */
+        /* Client: 極淺藍 */
+        body[data-role="client"] { 
+            --role-color: var(--g-blue); 
+            --bg-light: #f4f8fb; 
+        }
+        /* Partner: 極淺紅/粉 */
+        body[data-role="partner"] { 
+            --role-color: var(--g-red); 
+            --bg-light: #fff8f8; 
+        }
+        /* Dev: 極淺綠 */
+        body[data-role="dev"] { 
+            --role-color: var(--g-green); 
+            --bg-light: #f6fbf6; 
+        }
+
+        /* --- 版面配置 (Layout) --- */
+        .container {
+            max-width: 1400px; /* 加寬版面以容納側欄 */
+            margin: 0 auto;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 250px 1fr; /* 左側欄 250px，右內容自動填滿 */
+            gap: 40px;
+            align-items: start; /* 確保側欄 Sticky 生效 */
+        }
+
+        /* 手機版調整 */
+        @media (max-width: 768px) {
+            .container { grid-template-columns: 1fr; gap: 20px;}
+            .sidebar { display: none; } /* 手機版簡化，隱藏側欄 */
+        }
+
+        /* --- 頂部導航 (Sticky Header) --- */
+        .header {
+            background: rgba(255, 255, 255, 0.95); /* 微透明以透出底色 */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            padding: 15px 20px;
+            backdrop-filter: blur(5px);
+        }
+        .header-inner {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .brand { font-weight: bold; font-size: 1.2rem; display: flex; align-items: center; gap: 10px; }
+        .brand span { color: var(--g-gray); font-size: 0.9rem; font-weight: normal; }
+
+        /* --- 身份切換器 (Role Toggle) --- */
+        .role-switcher {
+            display: flex;
+            background: rgba(0,0,0,0.05);
+            border-radius: 25px;
+            padding: 3px;
+        }
+        .role-btn {
+            border: none;
+            background: transparent;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: bold;
+            color: #666;
+            transition: all 0.3s;
+        }
+        .role-btn.active {
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            color: var(--role-color);
+        }
+
+        /* --- 側邊目錄 (Sidebar) --- */
+        .sidebar {
+            position: sticky;
+            top: 100px; /* 距離頂部 Header 的位置 */
+            max-height: calc(100vh - 120px);
+            overflow-y: auto;
+            border-right: 1px solid rgba(0,0,0,0.1); /* 輕量化框線 */
+            padding-right: 20px;
+        }
+        /* 新增：側欄身份提示 */
+        .role-indicator {
+            background-color: white; /* 保持白色以凸顯 */
+            border: 1px solid rgba(0,0,0,0.1);
+            border-left: 4px solid var(--role-color);
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            color: #555;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .role-indicator strong { display: block; color: var(--role-color); font-size: 1rem; margin-top: 4px; }
+
+        .sidebar ul { list-style: none; padding: 0; margin: 0; }
+        .sidebar li { margin-bottom: 8px; }
+        .sidebar a { 
+            display: block;
+            text-decoration: none; 
+            color: #666; 
+            font-size: 0.95rem; 
+            padding: 8px 12px;
+            border-radius: 6px;
+            transition: all 0.2s; 
+        }
+        .sidebar a:hover { background-color: rgba(0,0,0,0.05); color: var(--text-main); }
+        .sidebar .active { 
+            color: var(--role-color); 
+            font-weight: bold; 
+            background-color: white; /* Active 改為白色背景 */
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        /* --- 導讀提示區 (Guide Box) --- */
+        .guide-box {
+            background-color: white;
+            border-left: 5px solid var(--role-color);
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 0 8px 8px 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            display: none; /* 預設隱藏，透過 JS 控制顯示 */
+        }
+        .guide-box.active { display: block; animation: fadeIn 0.5s; }
+        .guide-title { font-weight: bold; color: var(--role-color); margin-bottom: 5px; display: block; }
+        .guide-badge { 
+            display: inline-block; padding: 2px 8px; border-radius: 4px; 
+            font-size: 0.8rem; color: white; background: var(--role-color); margin-right: 5px; 
+        }
+
+        /* --- 新增：章節定位句 (Layer Context) --- */
+        .layer-context {
+            font-size: 1.05rem;
+            color: #444;
+            background: rgba(0,0,0,0.03);
+            padding: 8px 12px;
+            border-radius: 4px;
+            border-left: 3px solid #999;
+            margin-bottom: 20px;
+            display: inline-block;
+        }
+
+        /* --- 新增：警示框 (Small Warning) --- */
+        .warning-box-sm {
+            background: #fff3e0;
+            border: 1px solid #ffe0b2;
+            color: #e65100;
+            padding: 10px 15px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* --- 新增：回復點檢核表 (Recovery Box) --- */
+        .recovery-box {
+            background: #fbe9e7;
+            border: 1px dashed #ffab91;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+        }
+        .recovery-title { color: #d84315; font-weight: bold; font-size: 0.95rem; margin-bottom: 8px; display: block; }
+        .recovery-list { margin: 0; padding-left: 20px; color: #bf360c; font-size: 0.9rem; }
+
+        /* --- 內容區塊 (Content Sections) --- */
+        main {
+            min-width: 0; /* 防止 Grid Item 內容溢出 */
+        }
+
+        section {
+            background: white;
+            padding: 40px;
+            margin-bottom: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            border-top: 4px solid transparent;
+            scroll-margin-top: 100px; /* 讓錨點定位時不會被 Header 擋住 */
+        }
+        /* 根據架構層次上色 */
+        section.layer-html { border-top-color: var(--g-blue); }
+        section.layer-gas { border-top-color: var(--g-red); }
+        section.layer-db { border-top-color: var(--g-green); }
+        section.layer-general { border-top-color: var(--g-gray); }
+
+        h2 { margin-top: 0; color: #202124; display: flex; align-items: center; justify-content: space-between; font-size: 1.8rem; margin-bottom: 15px; }
+        .layer-tag { font-size: 0.8rem; padding: 4px 10px; border-radius: 12px; background: #eee; color: #555; font-weight: normal; white-space: nowrap; }
+        
+        .section-summary { font-size: 1.1rem; color: #5f6368; margin-bottom: 25px; font-weight: 500; border-bottom: 1px solid #eee; padding-bottom: 15px; }
+
+        /* --- SVG 佔位圖系統 (SVG Placeholders) --- */
+        .visual-container {
+            display: grid;
+            grid-template-columns: 2fr 1fr; /* 主圖 : 輔圖 */
+            gap: 20px;
+            margin: 30px 0;
+        }
+        @media (max-width: 768px) { .visual-container { grid-template-columns: 1fr; } }
+
+        .svg-box {
+            background: #f8f9fa;
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 220px;
+            position: relative;
+            padding: 20px;
+            text-align: center;
+        }
+        .svg-box svg { max-width: 100%; height: auto; margin-bottom: 10px; opacity: 0.8; }
+        .svg-caption { font-size: 0.95rem; color: #444; font-weight: bold; margin-top: 12px; }
+        .svg-intent { font-size: 0.85rem; color: #666; background: #eee; padding: 2px 8px; border-radius: 10px; margin-top: 5px; display: inline-block; }
+
+        /* --- 程式碼隱藏區 (Code Snippets) --- */
+        .code-placeholder {
+            background: #2d2d2d;
+            color: #ddd;
+            padding: 20px;
+            border-radius: 6px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9rem;
+            margin: 20px 0;
+            position: relative;
+            overflow-x: auto;
+        }
+        .code-placeholder::before {
+            content: "CODE SNIPPET";
+            position: absolute;
+            top: 0; right: 0;
+            background: #555;
+            color: white;
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 0 6px 0 6px;
+        }
+
+        /* --- 下載按鈕 --- */
+        .btn-download {
+            display: inline-block;
+            background: var(--g-blue);
+            color: white;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        .btn-download:hover { background: #3367d6; }
+        .warning-text { color: var(--g-red); font-size: 0.9rem; margin-top: 10px; }
+
+        /* --- FAQ 與 Details --- */
+        details {
+            background: #f1f3f4;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+            cursor: pointer;
+        }
+        summary { font-weight: bold; color: #444; font-size: 1.05rem; }
+        .details-content { padding-top: 10px; color: #555; font-size: 0.95rem; padding-left: 20px; }
+        .details-content ul, .details-content ol { padding-left: 20px; }
+
+        /* --- Footer --- */
+        footer {
+            background: white; /* Footer 改為白色，與內容區隔 */
+            text-align: center;
+            padding: 30px;
+            color: #666;
+            font-size: 0.85rem;
+            margin-top: 60px;
+            border-top: 1px solid rgba(0,0,0,0.1);
+        }
+        .footer-note { display: block; margin-top: 5px; font-style: italic; color: #888; font-size: 0.8rem; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* 根據角色顯示/隱藏特定內容 */
+        .for-client, .for-partner, .for-dev { display: none; }
+        body[data-role="client"] .for-client { display: block; }
+        body[data-role="partner"] .for-partner { display: block; }
+        body[data-role="dev"] .for-dev { display: block; }
+
+    </style>
+</head>
+<body data-role="client">
+
+    <!-- 頂部導航 -->
+    <header class="header">
+        <div class="header-inner">
+            <div class="brand">
+                CP 倉儲預約系統 v2.0
+                <span>| 部署導讀手冊</span>
+            </div>
+            
+            <div class="role-switcher">
+                <button class="role-btn active" onclick="setRole('client')" id="btn-client">客戶 / 決策者</button>
+                <button class="role-btn" onclick="setRole('partner')" id="btn-partner">FALO 夥伴 (內訓)</button>
+                <button class="role-btn" onclick="setRole('dev')" id="btn-dev">技術實作者</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        
+        <!-- 左側導覽列 (Sidebar) - Desktop Only -->
+        <aside class="sidebar">
+            <!-- 新增：身份狀態提示 -->
+            <div class="role-indicator">
+                👀 目前閱讀身份：
+                <strong id="role-text">客戶 / 決策者</strong>
+            </div>
+
+            <h3 style="margin-top: 0; margin-bottom: 20px; color: #444; font-size: 1.1rem; border-bottom: 2px solid #eee; padding-bottom: 10px;">章節導覽</h3>
+            <ul>
+                <li><a href="#sec-0" class="active">0. 入口導讀</a></li>
+                <li><a href="#sec-1">1. 核心目標與價值</a></li>
+                <li><a href="#sec-2">2. 三段式架構總覽</a></li>
+                <li><a href="#sec-3">3. 前端層 (HTML)</a></li>
+                <li><a href="#sec-4">4. 邏輯層 (GAS)</a></li>
+                <li><a href="#sec-5">5. 資料端 (Sheets)</a></li>
+                <li><a href="#sec-6">6. 部署路線圖</a></li>
+                <li><a href="#sec-7">7. 下載資源</a></li>
+                <li><a href="#sec-8">8. Roadmap</a></li>
+            </ul>
+        </aside>
+
+        <!-- 右側主要內容區 -->
+        <main>
+
+            <!-- CH 0: 入口導讀 -->
+            <section class="layer-general" id="sec-0">
+                <h2>0. 導讀指南：你該如何使用這份文件？ <span class="layer-tag">前言</span></h2>
+                
+                <!-- 新增：代碼警示 (前移) -->
+                <div class="warning-box-sm">
+                    ⚠️ <b>注意：</b> 本 Canvas 僅為導讀與架構說明頁，完整程式碼與逐步操作請參考資料底稿（doc/pdf + 加密 zip）。
+                </div>
+
+                <!-- 動態導讀文字 -->
+                <div class="guide-box active for-client">
+                    <span class="guide-title">👋 給 營運總監 / 專案經理：</span>
+                    這是一份實際落地文件。請專注於 **第 1 章 (效益與風險)** 與 **第 6 章 (操作手冊)**。技術細節可以略過，重點是了解「系統能做什麼」以及「如何治理」。
+                </div>
+                <div class="guide-box for-partner">
+                    <span class="guide-title">👋 給 FALO 夥伴 / 架構師學員：</span>
+                    這是一份教材母稿。請觀察我們如何用「三段式架構」來解構需求。請特別留意標有 **【FALO 內訓重點】** 的區塊，那是架構設計的靈魂。
+                </div>
+                <div class="guide-box for-dev">
+                    <span class="guide-title">👋 給 開發者 / 實作者：</span>
+                    這是一份規格書。這不是完整的程式碼庫，但包含了 **Schema、API Spec 與 關鍵邏輯**。請重點閱讀 **第 3, 4, 5 章** 並參考底稿中的完整 Code。
+                </div>
+
+                <div class="visual-container">
+                    <div class="svg-box">
+                        <svg width="200" height="100" viewBox="0 0 200 100">
+                            <rect x="10" y="10" width="60" height="80" fill="#E3F2FD" stroke="#4285F4" rx="5"/>
+                            <text x="40" y="55" text-anchor="middle" font-size="10" fill="#4285F4">Client View</text>
+                            
+                            <rect x="70" y="10" width="60" height="80" fill="#FCE4EC" stroke="#EA4335" rx="5"/>
+                            <text x="100" y="55" text-anchor="middle" font-size="10" fill="#EA4335">Partner View</text>
+                            
+                            <rect x="130" y="10" width="60" height="80" fill="#E8F5E9" stroke="#34A853" rx="5"/>
+                            <text x="160" y="55" text-anchor="middle" font-size="10" fill="#34A853">Tech View</text>
+                        </svg>
+                        <div class="svg-caption">SVG 01: 三重視角文件</div>
+                        <div class="svg-intent">這張圖主要幫你理解：同一份文件如何服務不同利害關係人</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- CH 1: 文件定位 -->
+            <section class="layer-general" id="sec-1">
+                <h2>1. 核心目標與價值 <span class="layer-tag">Overview</span></h2>
+                <div class="section-summary">30分鐘內完成「可運作、可驗證、可承擔基本營運」的 POC/MVP。</div>
+
+                <div class="for-client">
+                    <h3>為什麼需要這個系統？</h3>
+                    <p>解決痛點：車輛無預警到場導致壅塞、人工排程資訊不透明。</p>
+                    <p>核心價值：<b>無需伺服器維護、即刻可用。</b></p>
+                    <details open>
+                        <summary>風險控管 (Manager's View)</summary>
+                        <div class="details-content">
+                            <ul>
+                                <li><b>資料安全：</b>內建一鍵備份、版本還原。</li>
+                                <li><b>併發衝突：</b>後端實作 LockService 排隊鎖。</li>
+                                <li><b>營運持續：</b>若 Google 異常，可無縫降級為人工操作 Sheet。</li>
+                            </ul>
+                        </div>
+                    </details>
+                </div>
+
+                <div class="for-partner">
+                    <h3>FALO 方法論：MVP 的精髓</h3>
+                    <p>本系統體現了 FALO 四大支柱：</p>
+                    <ul>
+                        <li><b>Fast (快)：</b>Serverless 優勢，20分鐘上線。</li>
+                        <li><b>Auditable (可稽核)：</b>資料庫即介面，Sheet 讓數據透明化。</li>
+                        <li><b>Low-code (低代碼)：</b>只在關鍵邏輯寫 Code，介面用現成工具。</li>
+                        <li><b>Organized (有組織)：</b>標準池 (STD) 與 專案池 (PROJ) 的分流治理。</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- CH 2: 三段式架構總覽 -->
+            <section class="layer-general" id="sec-2">
+                <h2>2. 三段式架構總覽 <span class="layer-tag">Architecture</span></h2>
+                <div class="section-summary">HTML (UI) ↔ GAS (Logic) ↔ Sheets (DB)</div>
+
+                <div class="guide-box active">
+                    <span class="guide-badge">重要</span>
+                    這是本教材的核心架構。請理解這三層是如何「解耦 (Decoupling)」的。
+                </div>
+
+                <div class="visual-container">
+                    <!-- 主圖：架構全貌 -->
+                    <div class="svg-box" style="flex: 2;">
+                        <svg width="400" height="150" viewBox="0 0 400 150">
+                            <!-- 前端 -->
+                            <rect x="20" y="40" width="80" height="80" rx="10" fill="#E3F2FD" stroke="#4285F4" stroke-width="2"/>
+                            <text x="60" y="85" text-anchor="middle" font-size="12" fill="#1565C0" font-weight="bold">前端 HTML</text>
+                            
+                            <!-- 中間端 -->
+                            <rect x="160" y="40" width="80" height="80" rx="10" fill="#FFF3E0" stroke="#E65100" stroke-width="2"/>
+                            <text x="200" y="85" text-anchor="middle" font-size="12" fill="#E65100" font-weight="bold">GAS 邏輯層</text>
+                            
+                            <!-- DB -->
+                            <rect x="300" y="40" width="80" height="80" rx="10" fill="#E8F5E9" stroke="#2E7D32" stroke-width="2"/>
+                            <text x="340" y="85" text-anchor="middle" font-size="12" fill="#2E7D32" font-weight="bold">Sheets DB</text>
+
+                            <!-- 連接線 -->
+                            <line x1="100" y1="80" x2="160" y2="80" stroke="#666" stroke-width="2"/>
+                            <text x="130" y="70" text-anchor="middle" font-size="10" fill="#666">JSON/POST</text>
+
+                            <line x1="240" y1="80" x2="300" y2="80" stroke="#666" stroke-width="2"/>
+                            <text x="270" y="70" text-anchor="middle" font-size="10" fill="#666">API Call</text>
+                        </svg>
+                        <div class="svg-caption">SVG 02: 三段式架構圖</div>
+                        <div class="svg-intent">這張圖主要幫你理解：為什麼前端與資料庫之間一定要隔一層</div>
+                    </div>
+                    
+                    <!-- 輔圖：數據流 -->
+                    <div class="svg-box" style="flex: 1;">
+                        <svg width="150" height="150" viewBox="0 0 150 150">
+                             <circle cx="75" cy="75" r="60" fill="none" stroke="#FBBC05" stroke-width="2" stroke-dasharray="5,5"/>
+                             <text x="75" y="65" text-anchor="middle" font-size="10">Flow</text>
+                             <text x="75" y="85" text-anchor="middle" font-size="10">User → Bot → Data</text>
+                        </svg>
+                        <div class="svg-caption">SVG 03: 資料流向</div>
+                        <div class="svg-intent">這張圖主要幫你理解：資料如何從使用者流向資料庫</div>
+                    </div>
+                </div>
+
+                <div class="for-partner for-dev">
+                    <p><b>設計哲學：</b></p>
+                    <ul>
+                        <li><b>前端 (Client)：</b>負責「和人對話」。Vue3 單檔，脫離 Google 登入限制。</li>
+                        <li><b>中間端 (Middleware)：</b>負責「邏輯與安全」。交通警察，處理排隊鎖。</li>
+                        <li><b>資料端 (DB)：</b>負責「記憶與治理」。透明化資料庫，省下 Admin UI 開發成本。</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- CH 3: 前端 (HTML) -->
+            <section class="layer-html" id="sec-3">
+                <h2>3. 前端層：HTML + Vue3 <span class="layer-tag">Frontend</span></h2>
+                <!-- 新增：定位句 -->
+                <p class="layer-context">📍 你現在在「前端層」：只處理人機互動，不處理任何商業邏輯</p>
+                
+                <div class="section-summary">無須編譯、單一檔案、RWD 介面。</div>
+
+                <div class="visual-container">
+                    <div class="svg-box">
+                        <svg width="250" height="150" viewBox="0 0 250 150">
+                            <rect x="50" y="20" width="150" height="110" fill="white" stroke="#333" stroke-width="2"/>
+                            <rect x="60" y="30" width="130" height="20" fill="#4285F4"/>
+                            <rect x="60" y="60" width="130" height="10" fill="#eee"/>
+                            <rect x="60" y="80" width="130" height="10" fill="#eee"/>
+                            <rect x="60" y="100" width="60" height="20" fill="#34A853"/>
+                        </svg>
+                        <div class="svg-caption">SVG 04: UI Mockup</div>
+                        <div class="svg-intent">這張圖主要幫你理解：前端只負責顯示與送出，不含商業邏輯</div>
+                    </div>
+                    <div class="svg-box">
+                        <svg width="150" height="150" viewBox="0 0 150 150">
+                             <text x="75" y="40" text-anchor="middle" font-size="10">{ "action": "create",</text>
+                             <text x="75" y="60" text-anchor="middle" font-size="10">"payload": { ... } }</text>
+                             <rect x="30" y="20" width="90" height="60" fill="none" stroke="#666" rx="5"/>
+                             <path d="M75 90 L75 130" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+                        </svg>
+                        <div class="svg-caption">SVG 05: JSON Payload</div>
+                        <div class="svg-intent">這張圖主要幫你理解：前後端溝通的標準格式</div>
+                    </div>
+                </div>
+
+                <div class="for-dev">
+                    <details open>
+                        <summary>關鍵技術點</summary>
+                        <div class="details-content">
+                            <ul>
+                                <li><b>API_URL Binding：</b>前端唯一需要修改的變數，指向 GAS WebApp URL。</li>
+                                <li><b>Fetch API：</b>使用標準 POST 方法傳送 JSON。</li>
+                                <li><b>Vue3 CDN：</b>不使用 Webpack/Vite，直接引入 CDN，保持單檔可攜性。</li>
+                            </ul>
+                        </div>
+                    </details>
+                </div>
+            </section>
+
+            <!-- CH 4: 中間端 (GAS) -->
+            <section class="layer-gas" id="sec-4">
+                <h2>4. 邏輯層：Google Apps Script <span class="layer-tag">Middleware</span></h2>
+                <!-- 新增：定位句 -->
+                <p class="layer-context">📍 你現在在「中間層」：所有規則、驗證、分流都集中在這一層</p>
+
+                <div class="section-summary">Serverless 的核心大腦，處理 Action 分派與鎖定機制。</div>
+
+                <div class="visual-container">
+                    <div class="svg-box">
+                        <svg width="300" height="120" viewBox="0 0 300 120">
+                            <rect x="20" y="20" width="60" height="80" fill="#FFF3E0" stroke="#E65100"/>
+                            <text x="50" y="65" text-anchor="middle" font-size="10">doPost()</text>
+                            
+                            <path d="M80 60 L120 60" stroke="#333" stroke-width="2"/>
+                            
+                            <rect x="120" y="20" width="60" height="80" fill="#FFF3E0" stroke="#E65100"/>
+                            <text x="150" y="55" text-anchor="middle" font-size="10">Router</text>
+                            <text x="150" y="75" text-anchor="middle" font-size="8">(Switch)</text>
+                            
+                            <path d="M180 60 L220 30" stroke="#333" stroke-width="2"/>
+                            <path d="M180 60 L220 90" stroke="#333" stroke-width="2"/>
+                            
+                            <text x="250" y="35" font-size="10">Action A</text>
+                            <text x="250" y="95" font-size="10">Action B</text>
+                        </svg>
+                        <div class="svg-caption">SVG 06: 路由器 (Router) 模式</div>
+                        <div class="svg-intent">這張圖主要幫你理解：為什麼所有請求都要走 doPost 統一入口</div>
+                    </div>
+                    <div class="svg-box">
+                        <svg width="150" height="120" viewBox="0 0 150 120">
+                            <rect x="40" y="20" width="70" height="20" fill="#ffcccb" stroke="#d32f2f"/>
+                            <text x="75" y="35" text-anchor="middle" font-size="10">LockService</text>
+                            <rect x="40" y="50" width="70" height="50" fill="#e0f2f1" stroke="#00695c"/>
+                            <text x="75" y="75" text-anchor="middle" font-size="10">Critical Section</text>
+                        </svg>
+                        <div class="svg-caption">SVG 07: 排隊鎖 (Lock)</div>
+                        <div class="svg-intent">這張圖主要幫你理解：系統如何防止多人同時搶單</div>
+                    </div>
+                </div>
+
+                <div class="for-dev for-partner">
+                    <div class="code-placeholder">
+                        function doPost(e) {<br>
+                        &nbsp;&nbsp;const lock = LockService.getScriptLock();<br>
+                        &nbsp;&nbsp;lock.tryLock(10000); // 關鍵：避免 Race Condition<br>
+                        &nbsp;&nbsp;// ... Router Logic ...<br>
+                        }
+                    </div>
+                </div>
+            </section>
+
+            <!-- CH 5: 資料端 (Sheets) -->
+            <section class="layer-db" id="sec-5">
+                <h2>5. 資料端：Google Sheets <span class="layer-tag">Database</span></h2>
+                <!-- 新增：定位句 -->
+                <p class="layer-context">📍 你現在在「資料與治理層」：資料儲存即管理介面</p>
+
+                <div class="section-summary">五表分工：不只是存資料，更是治理介面。</div>
+
+                <div class="visual-container">
+                    <div class="svg-box" style="flex:2;">
+                         <svg width="350" height="150" viewBox="0 0 350 150">
+                            <g transform="translate(10,10)">
+                                <rect width="100" height="30" fill="#E8F5E9" stroke="#2E7D32"/>
+                                <text x="50" y="20" text-anchor="middle" font-size="10">Bookings (主檔)</text>
+                            </g>
+                            <g transform="translate(130,10)">
+                                <rect width="100" height="30" fill="#E8F5E9" stroke="#2E7D32"/>
+                                <text x="50" y="20" text-anchor="middle" font-size="10">Allocations (佔用)</text>
+                            </g>
+                             <g transform="translate(70,60)">
+                                <rect width="120" height="30" fill="#FFFDE7" stroke="#FBC02D"/>
+                                <text x="60" y="20" text-anchor="middle" font-size="10">Capacity (治理)</text>
+                            </g>
+                             <g transform="translate(10,110)">
+                                <rect width="80" height="25" fill="#f5f5f5" stroke="#999"/>
+                                <text x="40" y="17" text-anchor="middle" font-size="10">Config</text>
+                            </g>
+                             <g transform="translate(100,110)">
+                                <rect width="80" height="25" fill="#f5f5f5" stroke="#999"/>
+                                <text x="40" y="17" text-anchor="middle" font-size="10">Logs</text>
+                            </g>
+                        </svg>
+                        <div class="svg-caption">SVG 08: 五表結構</div>
+                        <div class="svg-intent">這張圖主要幫你理解：Google Sheets 如何同時作為資料庫與治理介面</div>
+                    </div>
+                    <div class="svg-box">
+                        <svg width="150" height="150" viewBox="0 0 150 150">
+                            <rect x="25" y="30" width="100" height="40" fill="#e0f7fa" stroke="#006064"/>
+                            <text x="75" y="55" text-anchor="middle" font-size="12">STD / PROJ</text>
+                             <text x="75" y="90" text-anchor="middle" font-size="10">自動分流</text>
+                        </svg>
+                        <div class="svg-caption">SVG 09: 分流機制</div>
+                        <div class="svg-intent">這張圖主要幫你理解：系統如何自動判斷標準池與專案池</div>
+                    </div>
+                </div>
+
+                <div class="for-client">
+                    <p><b>給主管的重點：</b>您擁有隨時介入的權力。</p>
+                    <ul>
+                        <li><b>想鎖住時段？</b> 去 CapacityWindows 把上限改為 0。</li>
+                        <li><b>想查是誰改的？</b> 去 Backup_Log 看紀錄。</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- CH 6: 部署路線圖 -->
+            <section class="layer-general for-dev for-partner" id="sec-6">
+                <h2>6. 部署路線圖 <span class="layer-tag">Deployment</span></h2>
+                <div class="visual-container">
+                    <div class="svg-box" style="flex:1;">
+                         <svg width="300" height="60" viewBox="0 0 300 60">
+                             <circle cx="30" cy="30" r="15" fill="#34A853"/> <text x="30" y="35" text-anchor="middle" fill="white" font-size="10">1</text>
+                             <line x1="45" y1="30" x2="105" y2="30" stroke="#ccc"/>
+                             <circle cx="120" cy="30" r="15" fill="#EA4335"/> <text x="120" y="35" text-anchor="middle" fill="white" font-size="10">2</text>
+                             <line x1="135" y1="30" x2="195" y2="30" stroke="#ccc"/>
+                             <circle cx="210" cy="30" r="15" fill="#4285F4"/> <text x="210" y="35" text-anchor="middle" fill="white" font-size="10">3</text>
+                             
+                             <text x="30" y="55" text-anchor="middle" font-size="8">建 Sheet</text>
+                             <text x="120" y="55" text-anchor="middle" font-size="8">部署 GAS</text>
+                             <text x="210" y="55" text-anchor="middle" font-size="8">綁定 HTML</text>
+                         </svg>
+                        <div class="svg-caption">SVG 10: 部署三步驟</div>
+                        <div class="svg-intent">這張圖主要幫你理解：從無到有的建置順序</div>
+                    </div>
+                </div>
+                <details>
+                    <summary>詳細步驟檢核表</summary>
+                    <div class="details-content">
+                        <ol>
+                            <li>建立空白 Sheet，執行初始化腳本。</li>
+                            <li>部署 WebApp，權限設為 "Me" + "Anyone"。</li>
+                            <li>複製 API URL，貼入 HTML 檔案。</li>
+                            <li>開啟 HTML，測試送單。</li>
+                        </ol>
+                        
+                        <!-- 新增：失敗回復點 -->
+                        <div class="recovery-box">
+                            <span class="recovery-title">🔁 如果失敗，請回到這一步重新檢查：</span>
+                            <ul class="recovery-list">
+                                <li>Step 1 失敗 → 檢查 Sheet 結構 / 欄位名稱是否被誤刪</li>
+                                <li>Step 2 失敗 → 檢查 WebApp 部署權限是否為 "Anyone"</li>
+                                <li>Step 3 失敗 → 檢查 API_URL 是否正確綁定到 HTML 中</li>
+                            </ul>
+                        </div>
+                    </div>
+                </details>
+            </section>
+
+            <!-- CH 7: 原始碼下載 -->
+            <section class="layer-general" id="sec-7">
+                <h2>7. 原始程式碼與資料底稿 <span class="layer-tag">Resources</span></h2>
+                
+                <div style="text-align: center; padding: 40px;">
+                    <div class="visual-container" style="justify-content: center;">
+                        <div class="svg-box" style="border-style: solid; border-color: var(--g-blue);">
+                             <svg width="60" height="60" viewBox="0 0 60 60">
+                                 <path d="M30 5 L30 45 M15 30 L30 45 L45 30" stroke="#4285F4" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                                 <line x1="10" y1="55" x2="50" y2="55" stroke="#4285F4" stroke-width="5" stroke-linecap="round"/>
+                             </svg>
+                             <div class="svg-caption">SVG 11: 下載區</div>
+                             <div class="svg-intent">取得完整可複製的程式碼與操作底稿</div>
+                        </div>
+                    </div>
+
+                    <p>完整程式碼 (Code.gs, Governance.gs, index.html) 與操作手冊 PDF 已打包。</p>
+                    
+                    <a href="https://www.google.com.tw" target="_blank" class="btn-download">下載完整部署包 (v2.0)</a>
+                    
+                    <p class="warning-text">
+                        ⚠️ 注意：Canvas 網頁僅供導讀，不提供完整可複製代碼。<br>
+                        請下載後參閱 doc/pdf 與加密 zip 檔。
+                    </p>
+                </div>
+            </section>
+
+            <!-- CH 8: Roadmap -->
+            <section class="layer-general" id="sec-8">
+                <h2>8. Roadmap: 這是起點，不是終點 <span class="layer-tag">Future</span></h2>
+                
+                <div class="visual-container">
+                     <div class="svg-box">
+                         <svg width="300" height="80" viewBox="0 0 300 80">
+                             <rect x="10" y="25" width="80" height="30" rx="5" fill="#E8F5E9" stroke="#34A853"/>
+                             <text x="50" y="45" text-anchor="middle" font-size="10">MVP (本版)</text>
+                             
+                             <line x1="90" y1="40" x2="120" y2="40" stroke="#999" marker-end="url(#arrow)"/>
+                             
+                             <rect x="120" y="25" width="80" height="30" rx="5" fill="#f5f5f5" stroke="#999"/>
+                             <text x="160" y="45" text-anchor="middle" font-size="10">vNext (LINE)</text>
+
+                             <line x1="200" y1="40" x2="230" y2="40" stroke="#999" marker-end="url(#arrow)"/>
+
+                             <rect x="230" y="25" width="60" height="30" rx="5" fill="#f5f5f5" stroke="#999"/>
+                             <text x="260" y="45" text-anchor="middle" font-size="10">Ent. (SQL)</text>
+                         </svg>
+                         <div class="svg-caption">SVG 12: 演進路線</div>
+                         <div class="svg-intent">這張圖主要幫你理解：MVP 只是起點，未來可擴充的方向</div>
+                    </div>
+                </div>
+
+                <div class="for-client">
+                    <p><b>未來可擴充：</b>LINE Notify 通知、Looker Studio 戰情室。</p>
+                </div>
+                <div class="for-partner">
+                     <p><b>技術遷移路徑：</b>GAS → AWS Lambda / Python Flask；Sheets → PostgreSQL。</p>
+                </div>
+            </section>
+
+        </main>
+
+    </div>
+
+    <!-- 頁尾 -->
+    <footer>
+        <p>&copy; 2026 Force Cheng (FALO). All rights reserved.</p>
+        <p>本教材僅供內部培訓與授權客戶使用，嚴禁未經授權之轉售或原始碼散佈。</p>
+        <span class="footer-note">This material reflects the FALO approach to MVP delivery and governance-first system design.</span>
+    </footer>
+
+    <!-- 腳本 (JS) -->
+    <script>
+        // 角色設定邏輯
+        function setRole(role) {
+            // 1. 設定 Body Attribute (觸發 CSS 變換)
+            document.body.setAttribute('data-role', role);
+
+            // 2. 更新按鈕狀態
+            document.querySelectorAll('.role-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('btn-' + role).classList.add('active');
+
+            // 3. 更新側欄身份文字
+            const roleNames = {
+                'client': '客戶 / 決策者',
+                'partner': 'FALO 夥伴 (內訓)',
+                'dev': '技術實作者'
+            };
+            const roleText = document.getElementById('role-text');
+            if(roleText) roleText.textContent = roleNames[role];
+
+            // 4. 更新導讀區塊顯示 (CSS transition)
+            document.querySelectorAll('.guide-box').forEach(box => box.classList.remove('active'));
+            // 小延遲讓 CSS 動畫順暢
+            setTimeout(() => {
+                const targetGuide = document.querySelector(`.guide-box.for-${role}`);
+                if(targetGuide) targetGuide.classList.add('active');
+            }, 50);
+
+            // 5. 自動處理 Details 折疊狀態
+            const allDetails = document.querySelectorAll('details');
+            if (role === 'client') {
+                // 客戶模式：折疊大部分技術細節，只留第一章
+                allDetails.forEach(d => d.removeAttribute('open'));
+                document.querySelector('#sec-1 details')?.setAttribute('open', '');
+            } else if (role === 'dev') {
+                // 開發模式：全部展開
+                allDetails.forEach(d => d.setAttribute('open', ''));
+            } else {
+                // 夥伴模式：預設狀態
+                allDetails.forEach(d => d.removeAttribute('open'));
+            }
+
+            // 6. [NEW] 切換角色時，平滑捲動回最上方
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // 初始化
+        setRole('client');
+
+        // 簡單的 Scroll Spy (更新側欄 Active 狀態)
+        window.addEventListener('scroll', () => {
+            const sections = document.querySelectorAll('section');
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                if (pageYOffset >= sectionTop - 150) {
+                    current = section.getAttribute('id');
+                }
+            });
+
+            document.querySelectorAll('.sidebar a').forEach(a => {
+                a.classList.remove('active');
+                if (a.getAttribute('href').includes(current)) {
+                    a.classList.add('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
